@@ -38,7 +38,7 @@ public:
 
     const tinygltf::Model& GetDocument() const { return m_model; }
     const std::vector<std::vector<std::shared_ptr<Mesh>>>& GetMeshes() const { return m_meshes; }
-    const std::vector<std::shared_ptr<Material>>& GetMaterials() const { return m_materials; }
+    std::vector<std::shared_ptr<Material>>& GetMaterials() { return m_materials; }
     const std::vector<std::shared_ptr<Sampler>>& GetSamplers() const { return m_samplers; }
     const std::vector<std::shared_ptr<Light>>& GetLights() const { return m_lights; }
 

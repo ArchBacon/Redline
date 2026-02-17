@@ -1,7 +1,8 @@
 #pragma once
 
-#include "glm/glm.hpp"
 #include "core/ecs.hpp"
+
+struct Active {};
 
 class Redline : public bee::System
 {

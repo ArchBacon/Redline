@@ -111,3 +111,11 @@ void bee::Device::RequestClose() { glfwSetWindowShouldClose(m_window, GL_TRUE); 
 bool bee::Device::ShouldClose() { return glfwWindowShouldClose(m_window); }
 
 GLFWwindow* bee::Device::GetWindow() { return m_window; }
+
+void bee::Device::SetWindowSize(int width, int height)
+{
+    m_width = width;
+    m_height = height;
+    glfwSetWindowSize(m_window, width, height);
+    glViewport(0, 0, width, height);
+}

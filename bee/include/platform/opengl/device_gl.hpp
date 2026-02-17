@@ -16,6 +16,8 @@ public:
     GLFWwindow* GetWindow();
     int GetWidth() const { return m_width; }
     int GetHeight() const { return m_height; }
+    float GetAspectRatio() const { return static_cast<float>(m_width) / static_cast<float>(m_height); }
+    void SetWindowSize(int width, int height);
     void BeginFrame() {}
     void EndFrame() {}
     float GetMonitorUIScale() const;

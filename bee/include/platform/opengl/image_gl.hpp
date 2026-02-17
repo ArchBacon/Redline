@@ -32,6 +32,7 @@ public:
         }
     }
 
+    Image() : Resource(ResourceType::Image) {}
     Image(const Model& model, int index, Format format);
     Image(FileIO::Directory directory, const std::string& path, Format format);
     virtual ~Image();
