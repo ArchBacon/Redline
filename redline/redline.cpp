@@ -1,7 +1,7 @@
 #include "redline.hpp"
 
-#include <glm/ext/matrix_clip_space.hpp>
-#include <glm/ext/matrix_transform.hpp>
+#include <glm/glm.hpp>
+#include <imgui/imgui.h>
 
 #include "vehicle.hpp"
 #include "core/engine.hpp"
@@ -18,26 +18,35 @@ Redline::Redline()
     BuickGrandNational87();
     
     // Create Camera
-    const auto entity = bee::Engine.ECS().CreateEntity();
-    auto& transform = bee::Engine.ECS().CreateComponent<bee::Transform>(entity);
-    transform.Name = "Camera";
-    auto projection = glm::perspective(glm::radians(70.0f), bee::Engine.Device().GetAspectRatio(), 0.2f, 500.0f);
-    auto view = lookAt(glm::vec3(5.0f, 5.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    transform.SetFromMatrix(glm::inverse(view));
-    bee::Engine.ECS().CreateComponent<bee::Camera>(entity).Projection = projection;
-    
+    camera = bee::Engine.ECS().CreateEntity();
+    auto& camTransform = bee::Engine.ECS().CreateComponent<bee::Transform>(camera);
+    camTransform.Name = "Camera";
+    bee::Engine.ECS().CreateComponent<bee::Camera>(camera);
+}
+
+void Redline::Update(float)
+{
+    float fov = glm::mix(70.f, 110.f, speed / 100.f);
+    glm::vec3 lookatOffset = glm::mix(glm::vec3(0.0f, 0.0f, 2.2f), glm::vec3(0.0f, 0.0f, 3.0f), speed / 100.f);
+
+    auto& camTransform = bee::Engine.ECS().Registry.get<bee::Transform>(camera);
+    auto& camProjection = bee::Engine.ECS().Registry.get<bee::Camera>(camera);
+    camProjection.Projection = glm::perspective(glm::radians(fov), bee::Engine.Device().GetAspectRatio(), 0.2f, 500.0f);
+
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
-        [this, &entity](bee::Transform& vtransform)
+        [&](bee::Transform& vtransform)
         {
-            auto& camTransform = bee::Engine.ECS().Registry.get<bee::Transform>(entity);
             auto forward = vtransform.GetRotation() * glm::vec3{0, 1, 0};
             auto& position = vtransform.GetTranslation();
             auto offset = glm::vec3{0.0f, 4.5f, 1.40f};
 
-            auto view = lookAt(position + offset, -forward + glm::vec3(0.0f, 0.0f, 2.2f), glm::vec3(0.0f, 0.0f, 1.0f));
+            auto view = lookAt(position + offset, -forward + lookatOffset, glm::vec3(0.0f, 0.0f, 1.0f));
             camTransform.SetFromMatrix(glm::inverse(view));
         }
     );
 }
 
-void Redline::Update(float) {}
+void Redline::OnPanel()
+{
+    ImGui::SliderFloat("Speed", &speed, 0.0f, 100.0f);
+}

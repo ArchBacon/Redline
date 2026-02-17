@@ -15,5 +15,5 @@ public:
     bee::Entity GetEntity() const { return ID; }
     
     bee::Entity CreateCarBody();
-    void CreateCarWheel(bee::Entity parent, const std::string& affix, const glm::vec3& position);
+    void CreateCarWheel(bee::Entity parent, const std::string& affix, const glm::vec3& position, bool mirror);
 };

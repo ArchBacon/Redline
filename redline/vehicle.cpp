@@ -9,10 +9,10 @@ BuickGrandNational87::BuickGrandNational87()
 {
     // Render Car
     const auto body = CreateCarBody();
-    CreateCarWheel(body, "FL", { 0.800f, 0.120f,  1.350f});
-    CreateCarWheel(body, "FR", {-0.800f, 0.120f,  1.350f});
-    CreateCarWheel(body, "RL", { 0.800f, 0.120f, -1.350f});
-    CreateCarWheel(body, "RR", {-0.800f, 0.120f, -1.350f});
+    CreateCarWheel(body, "FL", { 0.800f, 0.120f,  1.350f}, false);
+    CreateCarWheel(body, "FR", {-0.800f, 0.120f,  1.350f}, true);
+    CreateCarWheel(body, "RL", { 0.800f, 0.120f, -1.350f}, false);
+    CreateCarWheel(body, "RR", {-0.800f, 0.120f, -1.350f}, true);
 }
 
 bee::Entity BuickGrandNational87::CreateCarBody()
@@ -32,12 +32,12 @@ bee::Entity BuickGrandNational87::CreateCarBody()
     return entity;
 }
 
-void BuickGrandNational87::CreateCarWheel(const bee::Entity parent, const std::string& affix, const glm::vec3& position)
+void BuickGrandNational87::CreateCarWheel(const bee::Entity parent, const std::string& affix, const glm::vec3& position, const bool mirror)
 {
     const auto entity = bee::Engine.ECS().CreateEntity();
     auto& transform = bee::Engine.ECS().CreateComponent<bee::Transform>(entity);
     transform.Name = "Buick_Grand_National_87_Wheel_" + affix;
-    transform.SetRotation(glm::angleAxis(glm::half_pi<float>(), glm::vec3(1, 0, 0)));
+    transform.SetRotation(glm::angleAxis(glm::pi<float>(), glm::vec3(0, mirror, 0)));
     transform.SetTranslation(position);
 
     const auto model = bee::Engine.Resources().Load<bee::Model>(
