@@ -1,0 +1,10 @@
+﻿.vs
+*/intermediate
+*/executable
+*.user
+*.log
+*/assets/sce_module
+*/assets/shared
+/.idea
+*.vcx*
+.sln

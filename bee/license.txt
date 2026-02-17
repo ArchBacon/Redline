@@ -1,0 +1,60 @@
+Course License - NDA Required
+
+Copyright (c) 2025 Breda University of Applied Sciences (BUAS) 
+
+================================================================================
+
+STOP - NDA Required
+
+This project contains proprietary code under NDAs with game console 
+manufacturers. 
+
+You can only use this code if you:
+- Have signed the required umbrella NDAs
+- Are currently enrolled in the CMGT program at BUAS
+- Have been given explicit access by the instructor
+
+================================================================================
+
+What You Can Do
+
+- Use this code for your coursework and projects
+- Work with it in your assigned groups
+- Study and learn from it
+- Modify it for your assignments
+- Compile and run it on authorized hardware
+- Contribute to the development of the software
+
+
+What You Cannot Do
+
+- Post it online (GitHub, forums, Discord, anywhere)
+- Give it to students (or future students) not enrolled this semester
+- Break your console manufacturer NDAs (they still apply to everything here)
+
+
+Your NDA Obligations Still Apply
+
+Everything under NDA from the console makers stays confidential. Handle this 
+code like any other NDA material - carefully and privately.
+
+
+No Warranty
+
+This code is provided "as is" - no guarantees it works perfectly, no 
+liability for issues.
+
+
+If You Break These Rules
+
+Your access gets revoked immediately if you:
+- Share outside the course
+- Break your NDAs
+- Violate academic integrity policies
+
+You could also face academic penalties and legal consequences.
+
+================================================================================
+
+Questions? Contact endrovski.b@buas.nl
+Updated: October 27, 2025

@@ -1,0 +1,15 @@
+
+.vs
+.vscode
+.idea
+*.log
+*.vcxproj.user
+intermediate/
+lib/
+tidy/
+compile_commands/
+**/__pycache__/
+
+imgui.ini
+inspector.json
+compile_commands.json

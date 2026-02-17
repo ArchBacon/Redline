@@ -1,0 +1,32 @@
+name: Build
+
+on:
+  pull_request
+
+env:
+  SOLUTION_FILE: bee.sln
+
+permissions:
+  contents: read
+
+jobs:
+  build_all:
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        Configuration: ["Debug", "Release"]
+    runs-on: ${{ matrix.Platform == 'windows-latest' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup MSBuild path
+        uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+          
+      - name: Build engine
+        run: msbuild ${{env.SOLUTION_FILE}} -t:rebuild /p:Configuration=${{ matrix.Configuration }} /p:Platform=${{ matrix.Platform }}
