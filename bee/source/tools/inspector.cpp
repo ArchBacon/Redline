@@ -145,8 +145,8 @@ void SceneInspector::OnEntity(entt::entity entity)
             if (DragFloat3("Position", translation, 0.01f)) t.SetTranslation(translation);
             glm::vec3 scale(t.GetScale());
             if (DragFloat3("Scale", scale, 0.01f)) t.SetScale(scale);
-            glm::vec3 rotationEuler(glm::eulerAngles(t.GetRotation()));
-            if (DragFloat3("Rotation (Euler)", rotationEuler, 0.01f)) t.SetRotation(glm::quat(rotationEuler));
+            glm::vec3 rotationDeg = glm::degrees(glm::eulerAngles(t.GetRotation()));
+            if (DragFloat3("Rotation", rotationDeg, 0.5f)) t.SetRotation(glm::quat(glm::radians(rotationDeg)));
         }
     }
 }
