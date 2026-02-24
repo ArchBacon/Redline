@@ -1,12 +1,11 @@
 #pragma once
 
 #include <glm/vec3.hpp>
+#include <glm/geometric.hpp>
 #include <imgui/IconsFontAwesome.h>
 
 #include "core/ecs.hpp"
 #include "tools/inspectable.hpp"
-
-struct Vehicle {};
 
 class BuickGrandNational87
 {
@@ -67,14 +66,6 @@ public:
 */
 class VehicleSystem : public bee::System, public bee::IPanel
 {
-    float engineForce = 3000.f;
-    glm::vec3 direction = {};
-    float speed = {};
-    float drag = 0.528f;
-    float rr = 15.84f; // drag * 30
-    glm::vec3 traction = {};
-    glm::vec3 velocity = {};
-    
 public:
     VehicleSystem();
     ~VehicleSystem() override = default;
@@ -83,4 +74,46 @@ public:
     void OnPanel() override;
     [[nodiscard]] std::string GetName() const override { return "Vehicle Info"; }
     [[nodiscard]] std::string GetIcon() const override { return ICON_FA_AREA_CHART; }
+};
+
+struct VehicleData
+{
+    float engineForce {3000.f};
+    float drag {0.528f};
+    float mass {1530.f};
+};
+
+struct Vehicle
+{
+    float engineForce {};
+    float drag {};
+    float rr {}; // rolling resistance
+    float M {}; // mass in KG (curb)
+    glm::vec3 v {}; // velocity (m/s)
+    glm::vec3 u {}; // direction
+    
+    Vehicle(const VehicleData data)
+    {
+        engineForce = data.engineForce;
+        drag = data.drag;
+        rr = data.drag * 30;
+        M = data.mass;
+    }
+
+    [[nodiscard]] glm::vec3 Traction() const { return u * engineForce; }
+    [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
+    [[nodiscard]] glm::vec3 RollingResistance() const { return -rr * v; }
+    [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
+    [[nodiscard]] glm::vec3 Acceleration() const { return LongitudinalForce() / M; } // m/s^2
+    [[nodiscard]] glm::vec3 Velocity() const { return v; }
+    void SetVelocity(const glm::vec3 inV) { v = inV; }
+    [[nodiscard]] float Speed() const { return glm::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
+    [[nodiscard]] float SpeedXY() const { return glm::sqrt(v.x * v.x + v.y * v.y); }
+    [[nodiscard]] glm::vec3 Direction() const { return u; }
+
+    // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
+    [[nodiscard]] float TopSpeed() const
+    {
+        return (-rr + glm::sqrt(rr * rr + 4.0f * drag * engineForce)) / (2.0f * drag);
+    }
 };

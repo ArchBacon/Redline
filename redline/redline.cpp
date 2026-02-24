@@ -4,6 +4,7 @@
 #include <imgui/imgui.h>
 
 #include "vehicle.hpp"
+#include "floor.hpp"
 #include "core/engine.hpp"
 #include "core/transform.hpp"
 #include "platform/opengl/device_gl.hpp"
@@ -24,6 +25,9 @@ Redline::Redline()
         camTransform.Name = "Camera";
         bee::Engine.ECS().CreateComponent<bee::Camera>(camera);
     }
+    
+    // Create floor
+    Floor(400.0f, "greybox_grey_grid.png", 400.0f * 0.8f);
 }
 
 void Redline::Update(float)
@@ -38,7 +42,7 @@ void Redline::Update(float)
         camProjection.Projection = glm::perspective(glm::radians(fov), bee::Engine.Device().GetAspectRatio(), 0.2f, 500.0f);
 
         bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
-            [&](bee::Transform& vtransform)
+            [&](bee::Transform& vtransform, Vehicle&)
             {
                 auto forward = vtransform.GetRotation() * glm::vec3{0, 1, 0};
                 auto& position = vtransform.GetTranslation();
