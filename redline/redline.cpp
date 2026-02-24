@@ -27,7 +27,7 @@ Redline::Redline()
     }
     
     // Create floor
-    Floor(400.0f, "greybox_grey_grid.png", 400.0f * 0.8f);
+    Floor(20000.0f, "greybox_grey_grid.png", 20000.0f * 0.8f);
 }
 
 void Redline::Update(float)

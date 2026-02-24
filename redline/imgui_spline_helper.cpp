@@ -179,7 +179,7 @@ void SplineCanvas::DrawLabeledGrid(glm::ivec2 divisions, glm::vec2 xRange, glm::
             DrawLine(glm::vec2(x, 0), glm::vec2(x, m_canvasSize.y), gridColor, 1.0f);
 
         float value = xRange.x + (xRange.y - xRange.x) * (static_cast<float>(i) / static_cast<float>(divisions.x));
-        snprintf(buf, sizeof(buf), "%.0f", value);
+        snprintf(buf, sizeof(buf), "%.0f", value * 3.6);
         ImVec2 textSize = ImGui::CalcTextSize(buf);
         ImVec2 pos = ToScreen(glm::vec2(x - textSize.x * 0.5f, m_canvasSize.y + 2.0f));
         m_drawList->AddText(pos, textColor, buf);

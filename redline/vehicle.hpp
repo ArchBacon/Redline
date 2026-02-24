@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
 #include <imgui/IconsFontAwesome.h>
@@ -91,6 +92,10 @@ struct Vehicle
     float M {}; // mass in KG (curb)
     glm::vec3 v {}; // velocity (m/s)
     glm::vec3 u {}; // direction
+
+    float elapsed = 0.0f;
+    static constexpr std::array<float, 4> SplitTargets = { 80.f/3.6f, 100.f/3.6f, 160.f/3.6f, 200.f/3.6f };
+    std::array<float, 4> splitTimes = { -1.f, -1.f, -1.f, -1.f }; // negative = not yet reached
     
     Vehicle(const VehicleData data)
     {
