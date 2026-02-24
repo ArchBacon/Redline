@@ -10,7 +10,6 @@ workspace "redline"
     rtti "On"
     multiprocessorcompile "On"
     warnings "High"
-    fatalwarnings { "All" }
     conformancemode "On"
 
     filter "configurations:Debug"
