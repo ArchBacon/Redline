@@ -82,12 +82,14 @@ struct VehicleData
     float engineForce {3000.f};
     float drag {0.528f};
     float mass {1530.f};
+    float brakeForce {8000.f};
 };
 
 struct Vehicle
 {
     float engineForce {};
     float drag {};
+    float brakeForce {};
     float rr {}; // rolling resistance
     float M {}; // mass in KG (curb)
     glm::vec3 v {}; // velocity (m/s)
@@ -103,21 +105,32 @@ struct Vehicle
         drag = data.drag;
         rr = data.drag * 30;
         M = data.mass;
+        brakeForce = data.brakeForce;
     }
 
-    [[nodiscard]] glm::vec3 Traction() const { return u * engineForce; }
+    // [[nodiscard]] glm::vec3 Traction() const { return u * engineForce; }
     [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
     [[nodiscard]] glm::vec3 RollingResistance() const { return -rr * v; }
-    [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
-    [[nodiscard]] glm::vec3 LongitudinalForce(const float alpha) const { return Traction(alpha) + Drag() + RollingResistance(); }
-    [[nodiscard]] glm::vec3 Acceleration() const { return LongitudinalForce() / M; } // m/s^2
-    [[nodiscard]] glm::vec3 Acceleration(const float alpha) const { return LongitudinalForce(alpha) / M; } // m/s^2
+    // [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
+    [[nodiscard]] glm::vec3 LongitudinalForce(const float alpha, const bool braking) const
+    {
+        if (braking)
+        {
+            return BreakForce(alpha) + Drag() + RollingResistance();
+        }
+        
+        return Traction(alpha) + Drag() + RollingResistance();
+    }
+    // [[nodiscard]] glm::vec3 Acceleration() const { return LongitudinalForce() / M; } // m/s^2
+    [[nodiscard]] glm::vec3 Acceleration(const float alpha) const { return LongitudinalForce(alpha, false) / M; } // m/s^2
+    [[nodiscard]] glm::vec3 Braking(const float alpha) const { return LongitudinalForce(alpha, true) / M; } // m/s^2
     [[nodiscard]] glm::vec3 Velocity() const { return v; }
     void SetVelocity(const glm::vec3 inV) { v = inV; }
     [[nodiscard]] float Speed() const { return glm::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
     [[nodiscard]] float SpeedXY() const { return glm::sqrt(v.x * v.x + v.y * v.y); }
     [[nodiscard]] glm::vec3 Direction() const { return u; }
+    [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
     [[nodiscard]] float TopSpeed() const

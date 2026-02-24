@@ -94,15 +94,20 @@ VehicleSystem::VehicleSystem()
 
 void VehicleSystem::Update(float dt)
 {
-    float accel = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
-    float brake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
+    const float accel = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
+    const float brake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
     
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
-            vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Acceleration(accel)));
+            if (accel > 0.0f)
+                vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Acceleration(accel)));
+            else
+                vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Braking(brake)));
+            
             transform.SetTranslation(transform.GetTranslation() + dt * vehicle.Velocity());
 
+            // Record speed timings
             vehicle.elapsed += dt;
             for (int i = 0; i < (int)Vehicle::SplitTargets.size(); i++)
                 if (vehicle.splitTimes[i] < 0.f && vehicle.Speed() >= Vehicle::SplitTargets[i])
