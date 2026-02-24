@@ -7,6 +7,7 @@
 
 #include "imgui_spline_helper.hpp"
 #include "core/ecs.hpp"
+#include "core/input.hpp"
 #include "core/resources.hpp"
 #include "core/transform.hpp"
 #include "rendering/model.hpp"
@@ -93,11 +94,14 @@ VehicleSystem::VehicleSystem()
 
 void VehicleSystem::Update(float dt)
 {
+    float accel = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
+    float brake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
+    
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
-            vehicle.SetVelocity(vehicle.Velocity() + (dt * vehicle.Acceleration()));
-            transform.SetTranslation(transform.GetTranslation() + (dt * vehicle.Velocity()));
+            vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Acceleration(accel)));
+            transform.SetTranslation(transform.GetTranslation() + dt * vehicle.Velocity());
 
             vehicle.elapsed += dt;
             for (int i = 0; i < (int)Vehicle::SplitTargets.size(); i++)

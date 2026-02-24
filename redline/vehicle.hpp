@@ -106,10 +106,13 @@ struct Vehicle
     }
 
     [[nodiscard]] glm::vec3 Traction() const { return u * engineForce; }
+    [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
     [[nodiscard]] glm::vec3 RollingResistance() const { return -rr * v; }
     [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
+    [[nodiscard]] glm::vec3 LongitudinalForce(const float alpha) const { return Traction(alpha) + Drag() + RollingResistance(); }
     [[nodiscard]] glm::vec3 Acceleration() const { return LongitudinalForce() / M; } // m/s^2
+    [[nodiscard]] glm::vec3 Acceleration(const float alpha) const { return LongitudinalForce(alpha) / M; } // m/s^2
     [[nodiscard]] glm::vec3 Velocity() const { return v; }
     void SetVelocity(const glm::vec3 inV) { v = inV; }
     [[nodiscard]] float Speed() const { return glm::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }

@@ -32,6 +32,16 @@ Redline::Redline()
 
 void Redline::Update(float)
 {
+    bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
+        [&](bee::Transform& transform, Vehicle& vehicle)
+        {
+            if (transform.Name == "Buick_Grand_National_87")
+            {
+                speed = vehicle.Speed();
+            }
+        }
+    );
+    
     {   // Camera Updates
         float fov = glm::mix(70.f, 110.f, speed / 100.f);
         // Y=forward offset for lookat target
