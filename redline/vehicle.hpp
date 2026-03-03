@@ -80,9 +80,17 @@ public:
 struct VehicleData
 {
     float engineForce {3000.f};
-    float drag {0.528f};
+    float drag {0.44f};
     float mass {1530.f};
     float brakeForce {8000.f};
+    float differentialRatio {3.42f};
+    uint8_t gears {4};
+    std::vector<float> gearRatios {2.74f, 1.57f, 1.00f, 0.67f};
+    float reverseGearRatio {2.0f};
+    float wheelRadius {0.33f}; // Meters
+    float tyreFrictionCoefficient {1.0f};
+    float wheelBase {2.746f}; // Meters
+    float height {1.387f}; // Meters
 };
 
 struct Vehicle
@@ -94,24 +102,48 @@ struct Vehicle
     float M {}; // mass in KG (curb)
     glm::vec3 v {}; // velocity (m/s)
     glm::vec3 u {}; // direction
-
-    float elapsed = 0.0f;
-    static constexpr std::array<float, 4> SplitTargets = { 80.f/3.6f, 100.f/3.6f, 160.f/3.6f, 200.f/3.6f };
-    std::array<float, 4> splitTimes = { -1.f, -1.f, -1.f, -1.f }; // negative = not yet reached
+    float differentialRatio {};
+    uint8_t gears {};
+    std::vector<float> gearRatios {};
+    float transmissionEfficiency {0.85f};
+    float wheelRadius {};
+    float reverseGearRatio {};
+    float weight {}; // Newtons
+    float ForceMax {};
+    float wheelBase {};
+    float weightFront {};
+    float weightRear {};
+    float carHeight {};
+    float b {}; // Distance from CG (Center of Gravity) to Front Axle
+    float c {}; // Distance from CG to Rear Axle
+    float h {};
     
-    Vehicle(const VehicleData data)
+    Vehicle(const VehicleData& data)
     {
         engineForce = data.engineForce;
         drag = data.drag;
         rr = data.drag * 30;
         M = data.mass;
         brakeForce = data.brakeForce;
+        differentialRatio = data.differentialRatio;
+        gears = data.gears;
+        gearRatios = data.gearRatios;
+        wheelRadius = data.wheelRadius;
+        reverseGearRatio = data.reverseGearRatio;
+        weight = data.mass * 9.8f; // 9.8m/s for gravity force
+        ForceMax = data.tyreFrictionCoefficient * weight;
+        wheelBase = data.wheelBase;
+        // Weight distribution is a general estimation of 57%/43% Front/Rear
+        b = wheelBase * 0.57f; 
+        c = wheelBase * 0.43f;
+        h = data.height;
     }
 
-    // [[nodiscard]] glm::vec3 Traction() const { return u * engineForce; }
+    [[nodiscard]] float WeightFront(const float alpha) const { return (c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y; }
+    [[nodiscard]] float WeightRear(const float alpha) const { return (b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y; }
     [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
-    [[nodiscard]] glm::vec3 RollingResistance() const { return -rr * v; }
+    [[nodiscard]] glm::vec3 RollingResistance() const { return -(drag * 30) * v; }
     // [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
     [[nodiscard]] glm::vec3 LongitudinalForce(const float alpha, const bool braking) const
     {
@@ -131,6 +163,27 @@ struct Vehicle
     [[nodiscard]] float SpeedXY() const { return glm::sqrt(v.x * v.x + v.y * v.y); }
     [[nodiscard]] glm::vec3 Direction() const { return u; }
     [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
+    // Buick GN 3.8L Turbo V6 — actual lb-ft values, peak 355 lb-ft @ 2800 RPM
+    [[nodiscard]] float Torque(const float rpm) const
+    {
+        // TMP, untill RPM and proper Torque calculations are in
+        static constexpr float rpms[]    = {  800,   1500,  2000,  2800,  3500,  4400,  5000,  5500,  6000,  6500 };
+        static constexpr float torques[] = { 124.f, 206.f, 274.f, 355.f, 344.f, 291.f, 220.f, 160.f, 100.f,  50.f };
+        static constexpr int n = 10;
+        if (rpm <= rpms[0])   return torques[0];
+        if (rpm >= rpms[n-1]) return torques[n-1];
+        for (int i = 1; i < n; ++i)
+        {
+            if (rpm <= rpms[i])
+            {
+                const float t = (rpm - rpms[i-1]) / (rpms[i] - rpms[i-1]);
+                return torques[i-1] + t * (torques[i] - torques[i-1]);
+            }
+        }
+        return 0.0f;
+    }
+    [[nodiscard]] float Horsepower(const float rpm) const { return Torque(rpm) * rpm / 3000.f; }
+    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear - 1] * differentialRatio * transmissionEfficiency / wheelRadius; }
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
     [[nodiscard]] float TopSpeed() const

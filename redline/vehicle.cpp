@@ -31,12 +31,7 @@ inline glm::quat EulerDeg(float x, float y, float z)
 
 bee::Entity BuickGrandNational87::CreateCarBody()
 {
-    VehicleData vehicleData
-    {
-        3000.f,
-        0.528f,
-        1530.f
-    };
+    VehicleData vehicleData {};
     
     const auto entity = bee::Engine.ECS().CreateEntity();
     bee::Engine.ECS().CreateComponent<Vehicle>(entity, vehicleData);
@@ -106,12 +101,6 @@ void VehicleSystem::Update(float dt)
                 vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Braking(brake)));
             
             transform.SetTranslation(transform.GetTranslation() + dt * vehicle.Velocity());
-
-            // Record speed timings
-            vehicle.elapsed += dt;
-            for (int i = 0; i < (int)Vehicle::SplitTargets.size(); i++)
-                if (vehicle.splitTimes[i] < 0.f && vehicle.Speed() >= Vehicle::SplitTargets[i])
-                    vehicle.splitTimes[i] = vehicle.elapsed;
         }
     );
 }
@@ -125,32 +114,24 @@ void VehicleSystem::OnPanel()
             ImGui::Text("%s  %.2f m/s  %.2f km/h", transform.Name.c_str(), vehicle.Speed(), vehicle.Speed() * 3.6f);
 
             ImGui::Separator();
-            constexpr std::array<int, 4> splitKmh = { 80, 100, 160, 200 };
-            for (int i = 0; i < (int)splitKmh.size(); i++)
-            {
-                if (vehicle.splitTimes[i] >= 0.f)
-                    ImGui::Text("0-%d km/h  %.2f s", splitKmh[i], vehicle.splitTimes[i]);
-                else
-                    ImGui::TextDisabled("0-%d km/h  --", splitKmh[i]);
-            }
 
-            float topSpeed = 250.f / 3.6f;
+            float topSpeed = 300.f / 3.6f;
+            
+            // Graph dimensions
+            const float graphWidth = 450.0f;
+            const float graphHeight = 280.0f;
+        
+            const ImU32 graphColors[6] = {
+                IM_COL32(255, 80, 80, 255),   // 1st - Red
+                IM_COL32(255, 180, 80, 255),  // 2nd - Orange
+                IM_COL32(255, 255, 80, 255),  // 3rd - Yellow
+                IM_COL32(80, 255, 80, 255),   // 4th - Green
+                IM_COL32(80, 180, 255, 255),  // 5th - Blue
+                IM_COL32(180, 80, 255, 255)   // 6th - Purple
+            };
             
             if (ImGui::CollapsingHeader("Straight Line Physics", ImGuiTreeNodeFlags_DefaultOpen))
             {
-                // Graph dimensions
-                const float graphWidth = 450.0f;
-                const float graphHeight = 280.0f;
-            
-                const ImU32 graphColors[6] = {
-                    IM_COL32(255, 80, 80, 255),   // 1st - Red
-                    IM_COL32(255, 180, 80, 255),  // 2nd - Orange
-                    IM_COL32(255, 255, 80, 255),  // 3rd - Yellow
-                    IM_COL32(80, 255, 80, 255),   // 4th - Green
-                    IM_COL32(80, 180, 255, 255),  // 5th - Blue
-                    IM_COL32(180, 80, 255, 255)   // 6th - Purple
-                };
-            
                 static SplineCanvas canvas(graphWidth, graphHeight);
                 canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
             
@@ -161,7 +142,7 @@ void VehicleSystem::OnPanel()
                 // Precompute force values per speed step
                 
                 float speedSection = topSpeed / 39.0f;
-                float normalizedHeight = graphHeight;
+                float normalizedHeight = graphHeight * 0.8f;
                 float graphSectionWidth = graphWidth / 39.0f;
             
                 std::vector<float> engineValues(40);
@@ -246,6 +227,124 @@ void VehicleSystem::OnPanel()
                 ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "Drag");
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "RR+Drag");
+                
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+            }
+            
+            if (ImGui::CollapsingHeader("Torgue/Power", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                static SplineCanvas canvas(graphWidth, graphHeight);
+                canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
+            
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20.0f);
+                canvas.Begin();
+                
+                float normalizedHeight = graphHeight * 0.8f;
+                float graphSectionWidth = graphWidth / 99.f;
+            
+                constexpr float rpmMin = 800.f, rpmMax = 6500.f;
+                std::vector<float> hpValues(100);
+                std::vector<float> drive0Values(100);
+                std::vector<float> drive1Values(100);
+                std::vector<float> drive2Values(100);
+                std::vector<float> drive3Values(100);
+                float step_size = (rpmMax - rpmMin) / 39.f;
+                for (size_t i = 0; i < 100; ++i)
+                {
+                    float rpm = rpmMin + step_size * static_cast<float>(i);
+
+                    hpValues[i] = vehicle.Horsepower(rpm);
+                    drive0Values[i] = glm::abs(vehicle.DriveForce(rpm, 1).y);
+                    drive1Values[i] = glm::abs(vehicle.DriveForce(rpm, 2).y);
+                    drive2Values[i] = glm::abs(vehicle.DriveForce(rpm, 3).y);
+                    drive3Values[i] = glm::abs(vehicle.DriveForce(rpm, 4).y);
+                }
+            
+                // Auto-normalize: find max across all curves
+                float maxValue = 1.0f;
+                for (size_t i = 0; i < 100; ++i)
+                {
+                    maxValue = glm::max(maxValue, hpValues[i]);
+                    maxValue = glm::max(maxValue, drive0Values[i]);
+                    maxValue = glm::max(maxValue, drive1Values[i]);
+                    maxValue = glm::max(maxValue, drive2Values[i]);
+                    maxValue = glm::max(maxValue, drive3Values[i]);
+                }
+            
+                canvas.DrawLabeledGrid({10, 5}, {rpmMin / 3.6, rpmMax / 3.6}, {0.0f, maxValue});
+            
+                {   /** Draw Torque/Horsepower */
+                    std::vector<glm::vec2> points(100);
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        float y = graphHeight - (hpValues[i] / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
+                    }
+                    canvas.DrawSpline(points, graphColors[0]);
+                }
+                
+                {   /** Draw Drive Force */
+                    std::vector<glm::vec2> points(100);
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        float y = graphHeight - (drive0Values[i] / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
+                    }
+                    canvas.DrawSpline(points, graphColors[1]);
+                }
+                
+                {   /** Draw Drive Force */
+                    std::vector<glm::vec2> points(100);
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        float y = graphHeight - (drive1Values[i] / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
+                    }
+                    canvas.DrawSpline(points, graphColors[2]);
+                }
+                
+                {   /** Draw Drive Force */
+                    std::vector<glm::vec2> points(100);
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        float y = graphHeight - (drive2Values[i] / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
+                    }
+                    canvas.DrawSpline(points, graphColors[3]);
+                }
+                
+                {   /** Draw Drive Force */
+                    std::vector<glm::vec2> points(100);
+                    for (size_t i = 0; i < points.size(); ++i)
+                    {
+                        float y = graphHeight - (drive3Values[i] / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
+                    }
+                    canvas.DrawSpline(points, graphColors[4]);
+                }
+                
+                canvas.End();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+            
+                // Legend
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque/HP");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Gear 1");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "Gear 2");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Gear 3");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Gear 4");
             }
         }
     );
