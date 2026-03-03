@@ -11,6 +11,7 @@
 #include "core/resources.hpp"
 #include "core/transform.hpp"
 #include "rendering/model.hpp"
+#include "tools/log.hpp"
 
 BuickGrandNational87::BuickGrandNational87()
 {
@@ -43,7 +44,7 @@ bee::Entity BuickGrandNational87::CreateCarBody()
     const auto pivot = bee::Engine.ECS().CreateEntity();
     auto& pivotTransform = bee::Engine.ECS().CreateComponent<bee::Transform>(pivot);
     pivotTransform.Name = "ModelPivot";
-    pivotTransform.SetRotation(EulerDeg(90.0f, 0.0f, 0.0f));
+    pivotTransform.SetRotation(EulerDeg(90.0f, 0.0f, 180.0f));
     pivotTransform.SetParent(entity);
 
     const auto model = bee::Engine.Resources().Load<bee::Model>(
@@ -82,7 +83,8 @@ VehicleSystem::VehicleSystem()
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
-            vehicle.u = transform.GetRotation() * glm::vec3{0, -1, 0}; // face forward
+            vehicle.u = transform.GetRotation() * glm::vec3{0, 1, 0}; // face forward
+            bee::Log::Info(std::to_string(glm::abs(vehicle.DriveForce(4400, 1).y)));
         }
     );
 }

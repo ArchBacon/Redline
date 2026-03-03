@@ -87,7 +87,7 @@ struct VehicleData
     float mass {1530.f};
     float brakeForce {8000.f};
     float differentialRatio {3.42f};
-    uint8_t gears {4};
+    uint32_t gears {4};
     std::vector<float> gearRatios {2.74f, 1.57f, 1.00f, 0.67f};
     float reverseGearRatio {2.0f};
     float wheelRadius {0.33f}; // Meters
@@ -95,7 +95,7 @@ struct VehicleData
     float wheelBase {2.746f}; // Meters
     float height {1.387f}; // Meters
     std::string torqueCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_TorqueData.csv"}; 
-    std::string horsepoqerCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_PowerData.csv"}; 
+    std::string horsepowerCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_PowerData.csv"};
 };
 
 struct Vehicle
@@ -116,12 +116,11 @@ struct Vehicle
     float weight {}; // Newtons
     float ForceMax {};
     float wheelBase {};
-    float weightFront {};
-    float weightRear {};
     float carHeight {};
     float b {}; // Distance from CG (Center of Gravity) to Front Axle
     float c {}; // Distance from CG to Rear Axle
     float h {};
+    float g {9.8f}; // Gravity
     std::unique_ptr<Curve> torqueCurve {nullptr};
     std::unique_ptr<Curve> horsepowerCurve {nullptr};
     
@@ -137,7 +136,7 @@ struct Vehicle
         gearRatios = data.gearRatios;
         wheelRadius = data.wheelRadius;
         reverseGearRatio = data.reverseGearRatio;
-        weight = data.mass * 9.8f; // 9.8m/s for gravity force
+        weight = data.mass * g;
         ForceMax = data.tyreFrictionCoefficient * weight;
         wheelBase = data.wheelBase;
         // Weight distribution is a general estimation of 57%/43% Front/Rear
@@ -145,11 +144,11 @@ struct Vehicle
         c = wheelBase * 0.43f;
         h = data.height;
         torqueCurve = std::make_unique<Curve>(data.torqueCurvePath);
-        horsepowerCurve = std::make_unique<Curve>(data.horsepoqerCurvePath);
+        horsepowerCurve = std::make_unique<Curve>(data.horsepowerCurvePath);
     }
 
-    [[nodiscard]] float WeightFront(const float alpha) const { return (c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y; }
-    [[nodiscard]] float WeightRear(const float alpha) const { return (b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y; }
+    [[nodiscard]] float WeightFront(const float alpha) const { return MaxTraction() - ((c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y); }
+    [[nodiscard]] float WeightRear(const float alpha) const { return MaxTraction() + ((b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y); }
     [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
     [[nodiscard]] glm::vec3 RollingResistance() const { return -(drag * 30) * v; }
@@ -174,6 +173,8 @@ struct Vehicle
     [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
     [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
     [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear - 1] * differentialRatio * transmissionEfficiency / wheelRadius; }
+    [[nodiscard]] float MaxTraction() const { return (M * 0.57f) * g; }
+
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
     [[nodiscard]] float TopSpeed() const

@@ -58,7 +58,7 @@ void Redline::Update(float)
             {
                 auto forward = vtransform.GetRotation() * glm::vec3{0, 1, 0};
                 auto& position = vtransform.GetTranslation();
-                auto offset = glm::vec3{0.0f, 4.f, 1.40f};
+                auto offset = glm::vec3{0.0f, -4.2f, 1.40f};
 
                 auto view = lookAt(position + offset, position + forward + lookatOffset, glm::vec3(0.0f, 0.0f, 1.0f));
                 camTransform.SetFromMatrix(glm::inverse(view));
