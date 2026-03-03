@@ -39,8 +39,9 @@ public:
 
     // Draw labeled grid with axis values
     // xRange/yRange: the data range each axis represents (e.g. 0-200 for speed)
-    // yFlipped: if true, y labels go from max at top to 0 at bottom
+    // xLabel/yLabel: optional axis title strings
     void DrawLabeledGrid(glm::ivec2 divisions, glm::vec2 xRange, glm::vec2 yRange,
+                         const char* xLabel = nullptr, const char* yLabel = nullptr,
                          ImU32 gridColor = IM_COL32(45, 48, 55, 255),
                          ImU32 textColor = IM_COL32(160, 160, 170, 255));
 

@@ -1,5 +1,7 @@
 #include "imgui_spline_helper.hpp"
 
+#include <imgui/imgui_internal.h>
+
 SplineCanvas::SplineCanvas(float width, float height)
     : m_canvasSize(width, height)
 {
@@ -163,7 +165,24 @@ void SplineCanvas::DrawGrid(glm::ivec2 divisions, ImU32 color)
     }
 }
 
+static void AddTextRotated(ImDrawList* dl, ImVec2 pivot, float angle, ImU32 col, const char* text)
+{
+    const int vtxBegin = dl->VtxBuffer.Size;
+    dl->AddText(pivot, col, text);
+    const float cosA = cosf(angle);
+    const float sinA = sinf(angle);
+    for (int i = vtxBegin; i < dl->VtxBuffer.Size; ++i)
+    {
+        ImDrawVert& v = dl->VtxBuffer[i];
+        const float dx = v.pos.x - pivot.x;
+        const float dy = v.pos.y - pivot.y;
+        v.pos.x = pivot.x + cosA * dx - sinA * dy;
+        v.pos.y = pivot.y + sinA * dx + cosA * dy;
+    }
+}
+
 void SplineCanvas::DrawLabeledGrid(glm::ivec2 divisions, glm::vec2 xRange, glm::vec2 yRange,
+                                    const char* xLabel, const char* yLabel,
                                     ImU32 gridColor, ImU32 textColor)
 {
     float stepX = m_canvasSize.x / static_cast<float>(divisions.x);
@@ -199,5 +218,24 @@ void SplineCanvas::DrawLabeledGrid(glm::ivec2 divisions, glm::vec2 xRange, glm::
         ImVec2 textSize = ImGui::CalcTextSize(buf);
         ImVec2 pos = ToScreen(glm::vec2(-textSize.x - 4.0f, y - textSize.y * 0.5f));
         m_drawList->AddText(pos, textColor, buf);
+    }
+
+    // X axis label — centered below the tick values
+    if (xLabel)
+    {
+        ImVec2 labelSize = ImGui::CalcTextSize(xLabel);
+        ImVec2 pos = ToScreen(glm::vec2(
+            m_canvasSize.x * 0.5f - labelSize.x * 0.5f,
+            m_canvasSize.y + 16.0f));
+        m_drawList->AddText(pos, textColor, xLabel);
+    }
+
+    // Y axis label — rotated -90°, centered on the left edge
+    if (yLabel)
+    {
+        ImVec2 labelSize = ImGui::CalcTextSize(yLabel);
+        float pivotX = m_canvasPos.x - 46.0f;
+        float pivotY = m_canvasPos.y + m_canvasSize.y * 0.5f + labelSize.x * 0.5f;
+        AddTextRotated(m_drawList, ImVec2(pivotX, pivotY), -IM_PI * 0.5f, textColor, yLabel);
     }
 }

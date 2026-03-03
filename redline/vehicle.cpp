@@ -113,9 +113,7 @@ void VehicleSystem::OnPanel()
             ImGui::Text("Top Speed  %.1f m/s  %.1f km/h", vehicle.TopSpeed(), vehicle.TopSpeed() * 3.6f);
             ImGui::Text("%s  %.2f m/s  %.2f km/h", transform.Name.c_str(), vehicle.Speed(), vehicle.Speed() * 3.6f);
 
-            ImGui::Separator();
-
-            float topSpeed = 300.f / 3.6f;
+            float topSpeed = 300.f / 3.6f; // Convert to m/s
             
             // Graph dimensions
             const float graphWidth = 450.0f;
@@ -142,7 +140,7 @@ void VehicleSystem::OnPanel()
                 // Precompute force values per speed step
                 
                 float speedSection = topSpeed / 39.0f;
-                float normalizedHeight = graphHeight * 0.8f;
+                float normalizedHeight = graphHeight;
                 float graphSectionWidth = graphWidth / 39.0f;
             
                 std::vector<float> engineValues(40);
@@ -169,8 +167,8 @@ void VehicleSystem::OnPanel()
                     maxValue = glm::max(maxValue, dragValues[i] + rrValues[i]);
                 }
             
-                float yMax = maxValue;
-                canvas.DrawLabeledGrid({10, 5}, {0.0f, topSpeed * 3.6f}, {0.0f, yMax});
+                maxValue *= 1.1f;
+                canvas.DrawLabeledGrid({10, 5}, {0.0f, topSpeed * 3.6f}, {0.0f, maxValue}, "Km/h", "Force");
             
                 {   /** Draw Engine Force */
                     std::vector<glm::vec2> points(40);
@@ -244,7 +242,7 @@ void VehicleSystem::OnPanel()
                 ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20.0f);
                 canvas.Begin();
                 
-                float normalizedHeight = graphHeight * 0.8f;
+                float normalizedHeight = graphHeight;
                 float graphSectionWidth = graphWidth / 39.f;
             
                 const float rpmMin = vehicle.torqueCurve->GetMinT();
@@ -268,7 +266,8 @@ void VehicleSystem::OnPanel()
                     maxValue = glm::max(maxValue, horseValues[i]);
                 }
             
-                canvas.DrawLabeledGrid({10, 5}, {rpmMin, rpmMax}, {0.0f, maxValue});
+                maxValue *= 1.1f;
+                canvas.DrawLabeledGrid({10, 5}, {rpmMin, rpmMax}, {0.0f, maxValue}, "RPM", "Torque / Power");
             
                 {   /** Draw Torque */
                     std::vector<glm::vec2> points(40);
@@ -298,9 +297,9 @@ void VehicleSystem::OnPanel()
                 ImGui::Spacing();
             
                 // Legend
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque");
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque (N.m)");
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Horsepower");
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Power (kW)");
             }
         }
     );
