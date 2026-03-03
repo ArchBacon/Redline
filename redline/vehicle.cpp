@@ -130,7 +130,7 @@ void VehicleSystem::OnPanel()
                 IM_COL32(180, 80, 255, 255)   // 6th - Purple
             };
             
-            if (ImGui::CollapsingHeader("Straight Line Physics", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Velocity/Force", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 static SplineCanvas canvas(graphWidth, graphHeight);
                 canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
@@ -170,7 +170,7 @@ void VehicleSystem::OnPanel()
                 }
             
                 float yMax = maxValue;
-                canvas.DrawLabeledGrid({10, 5}, {0.0f, topSpeed}, {0.0f, yMax});
+                canvas.DrawLabeledGrid({10, 5}, {0.0f, topSpeed * 3.6f}, {0.0f, yMax});
             
                 {   /** Draw Engine Force */
                     std::vector<glm::vec2> points(40);
@@ -235,7 +235,7 @@ void VehicleSystem::OnPanel()
                 ImGui::Spacing();
             }
             
-            if (ImGui::CollapsingHeader("Torgue/Power", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Torque/Power", ImGuiTreeNodeFlags_DefaultOpen))
             {
                 static SplineCanvas canvas(graphWidth, graphHeight);
                 canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
@@ -245,87 +245,49 @@ void VehicleSystem::OnPanel()
                 canvas.Begin();
                 
                 float normalizedHeight = graphHeight * 0.8f;
-                float graphSectionWidth = graphWidth / 99.f;
+                float graphSectionWidth = graphWidth / 39.f;
             
-                constexpr float rpmMin = 800.f, rpmMax = 6500.f;
-                std::vector<float> hpValues(100);
-                std::vector<float> drive0Values(100);
-                std::vector<float> drive1Values(100);
-                std::vector<float> drive2Values(100);
-                std::vector<float> drive3Values(100);
+                const float rpmMin = vehicle.torqueCurve->GetMinT();
+                const float rpmMax = vehicle.torqueCurve->GetMaxT();
+                std::vector<float> torqueValues(40);
+                std::vector<float> horseValues(40);
                 float step_size = (rpmMax - rpmMin) / 39.f;
-                for (size_t i = 0; i < 100; ++i)
+                for (size_t i = 0; i < 40; ++i)
                 {
                     float rpm = rpmMin + step_size * static_cast<float>(i);
 
-                    hpValues[i] = vehicle.Horsepower(rpm);
-                    drive0Values[i] = glm::abs(vehicle.DriveForce(rpm, 1).y);
-                    drive1Values[i] = glm::abs(vehicle.DriveForce(rpm, 2).y);
-                    drive2Values[i] = glm::abs(vehicle.DriveForce(rpm, 3).y);
-                    drive3Values[i] = glm::abs(vehicle.DriveForce(rpm, 4).y);
+                    torqueValues[i] = vehicle.Torque(rpm);
+                    horseValues[i] = vehicle.Horsepower(rpm);
                 }
             
                 // Auto-normalize: find max across all curves
                 float maxValue = 1.0f;
-                for (size_t i = 0; i < 100; ++i)
+                for (size_t i = 0; i < 40; ++i)
                 {
-                    maxValue = glm::max(maxValue, hpValues[i]);
-                    maxValue = glm::max(maxValue, drive0Values[i]);
-                    maxValue = glm::max(maxValue, drive1Values[i]);
-                    maxValue = glm::max(maxValue, drive2Values[i]);
-                    maxValue = glm::max(maxValue, drive3Values[i]);
+                    maxValue = glm::max(maxValue, torqueValues[i]);
+                    maxValue = glm::max(maxValue, horseValues[i]);
                 }
             
-                canvas.DrawLabeledGrid({10, 5}, {rpmMin / 3.6, rpmMax / 3.6}, {0.0f, maxValue});
+                canvas.DrawLabeledGrid({10, 5}, {rpmMin, rpmMax}, {0.0f, maxValue});
             
-                {   /** Draw Torque/Horsepower */
-                    std::vector<glm::vec2> points(100);
+                {   /** Draw Torque */
+                    std::vector<glm::vec2> points(40);
                     for (size_t i = 0; i < points.size(); ++i)
                     {
-                        float y = graphHeight - (hpValues[i] / maxValue) * normalizedHeight;
+                        float y = graphHeight - (torqueValues[i] / maxValue) * normalizedHeight;
                         points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
                     }
                     canvas.DrawSpline(points, graphColors[0]);
                 }
                 
-                {   /** Draw Drive Force */
-                    std::vector<glm::vec2> points(100);
+                {   /** Draw Horsepower */
+                    std::vector<glm::vec2> points(40);
                     for (size_t i = 0; i < points.size(); ++i)
                     {
-                        float y = graphHeight - (drive0Values[i] / maxValue) * normalizedHeight;
+                        float y = graphHeight - (horseValues[i] / maxValue) * normalizedHeight;
                         points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
                     }
                     canvas.DrawSpline(points, graphColors[1]);
-                }
-                
-                {   /** Draw Drive Force */
-                    std::vector<glm::vec2> points(100);
-                    for (size_t i = 0; i < points.size(); ++i)
-                    {
-                        float y = graphHeight - (drive1Values[i] / maxValue) * normalizedHeight;
-                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
-                    }
-                    canvas.DrawSpline(points, graphColors[2]);
-                }
-                
-                {   /** Draw Drive Force */
-                    std::vector<glm::vec2> points(100);
-                    for (size_t i = 0; i < points.size(); ++i)
-                    {
-                        float y = graphHeight - (drive2Values[i] / maxValue) * normalizedHeight;
-                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
-                    }
-                    canvas.DrawSpline(points, graphColors[3]);
-                }
-                
-                {   /** Draw Drive Force */
-                    std::vector<glm::vec2> points(100);
-                    for (size_t i = 0; i < points.size(); ++i)
-                    {
-                        float y = graphHeight - (drive3Values[i] / maxValue) * normalizedHeight;
-                        points[i] = glm::vec2(graphSectionWidth * static_cast<float>(i), y);
-                    }
-                    canvas.DrawSpline(points, graphColors[4]);
                 }
                 
                 canvas.End();
@@ -336,15 +298,9 @@ void VehicleSystem::OnPanel()
                 ImGui::Spacing();
             
                 // Legend
-                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque/HP");
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque");
                 ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Gear 1");
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "Gear 2");
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "Gear 3");
-                ImGui::SameLine();
-                ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Gear 4");
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Horsepower");
             }
         }
     );

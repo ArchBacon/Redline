@@ -5,8 +5,11 @@
 #include <glm/geometric.hpp>
 #include <imgui/IconsFontAwesome.h>
 
+#include "Curve.h"
 #include "core/ecs.hpp"
 #include "tools/inspectable.hpp"
+
+class Curve;
 
 class BuickGrandNational87
 {
@@ -91,6 +94,8 @@ struct VehicleData
     float tyreFrictionCoefficient {1.0f};
     float wheelBase {2.746f}; // Meters
     float height {1.387f}; // Meters
+    std::string torqueCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_TorqueData.csv"}; 
+    std::string horsepoqerCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_PowerData.csv"}; 
 };
 
 struct Vehicle
@@ -117,6 +122,8 @@ struct Vehicle
     float b {}; // Distance from CG (Center of Gravity) to Front Axle
     float c {}; // Distance from CG to Rear Axle
     float h {};
+    std::unique_ptr<Curve> torqueCurve {nullptr};
+    std::unique_ptr<Curve> horsepowerCurve {nullptr};
     
     Vehicle(const VehicleData& data)
     {
@@ -137,6 +144,8 @@ struct Vehicle
         b = wheelBase * 0.57f; 
         c = wheelBase * 0.43f;
         h = data.height;
+        torqueCurve = std::make_unique<Curve>(data.torqueCurvePath);
+        horsepowerCurve = std::make_unique<Curve>(data.horsepoqerCurvePath);
     }
 
     [[nodiscard]] float WeightFront(const float alpha) const { return (c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y; }
@@ -154,7 +163,6 @@ struct Vehicle
         
         return Traction(alpha) + Drag() + RollingResistance();
     }
-    // [[nodiscard]] glm::vec3 Acceleration() const { return LongitudinalForce() / M; } // m/s^2
     [[nodiscard]] glm::vec3 Acceleration(const float alpha) const { return LongitudinalForce(alpha, false) / M; } // m/s^2
     [[nodiscard]] glm::vec3 Braking(const float alpha) const { return LongitudinalForce(alpha, true) / M; } // m/s^2
     [[nodiscard]] glm::vec3 Velocity() const { return v; }
@@ -163,26 +171,8 @@ struct Vehicle
     [[nodiscard]] float SpeedXY() const { return glm::sqrt(v.x * v.x + v.y * v.y); }
     [[nodiscard]] glm::vec3 Direction() const { return u; }
     [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
-    // Buick GN 3.8L Turbo V6 — actual lb-ft values, peak 355 lb-ft @ 2800 RPM
-    [[nodiscard]] float Torque(const float rpm) const
-    {
-        // TMP, untill RPM and proper Torque calculations are in
-        static constexpr float rpms[]    = {  800,   1500,  2000,  2800,  3500,  4400,  5000,  5500,  6000,  6500 };
-        static constexpr float torques[] = { 124.f, 206.f, 274.f, 355.f, 344.f, 291.f, 220.f, 160.f, 100.f,  50.f };
-        static constexpr int n = 10;
-        if (rpm <= rpms[0])   return torques[0];
-        if (rpm >= rpms[n-1]) return torques[n-1];
-        for (int i = 1; i < n; ++i)
-        {
-            if (rpm <= rpms[i])
-            {
-                const float t = (rpm - rpms[i-1]) / (rpms[i] - rpms[i-1]);
-                return torques[i-1] + t * (torques[i] - torques[i-1]);
-            }
-        }
-        return 0.0f;
-    }
-    [[nodiscard]] float Horsepower(const float rpm) const { return Torque(rpm) * rpm / 3000.f; }
+    [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
+    [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
     [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear - 1] * differentialRatio * transmissionEfficiency / wheelRadius; }
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula

@@ -3,12 +3,14 @@
 #include <glm/glm.hpp>
 #include <imgui/imgui.h>
 
+#include "Curve.h"
 #include "vehicle.hpp"
 #include "floor.hpp"
 #include "core/engine.hpp"
 #include "core/transform.hpp"
 #include "platform/opengl/device_gl.hpp"
 #include "platform/opengl/render_gl.hpp"
+#include "tools/log.hpp"
 
 Redline::Redline()
 {
@@ -28,6 +30,11 @@ Redline::Redline()
     
     // Create floor
     Floor(20000.0f, "greybox_grey_grid.png", 20000.0f * 0.8f);
+    
+    // Create test curve
+    torqueCurve = std::make_unique<Curve>("vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_TorqueData.csv");
+    float value = torqueCurve->GetMaxT();
+    bee::Log::Info("Value in curve: {}", value);
 }
 
 void Redline::Update(float)

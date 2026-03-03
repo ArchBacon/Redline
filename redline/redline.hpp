@@ -5,12 +5,15 @@
 #include "core/ecs.hpp"
 #include "tools/inspectable.hpp"
 
+class Curve;
+
 struct Active {};
 
 class Redline : public bee::System, public bee::IPanel
 {
     float speed = 0.0f;
     bee::Entity camera{entt::null};
+    std::unique_ptr<Curve> torqueCurve {nullptr};
     
 public:
     Redline();
