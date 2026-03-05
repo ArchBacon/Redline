@@ -6,8 +6,6 @@
 
 Curve::Curve(const std::string& path)
 {
-    bee::Log::Info("creating curve...");
-    
     LoadCSV(path);
 }
 

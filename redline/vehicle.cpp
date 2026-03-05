@@ -84,7 +84,7 @@ VehicleSystem::VehicleSystem()
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
             vehicle.u = transform.GetRotation() * glm::vec3{0, 1, 0}; // face forward
-            bee::Log::Info(std::to_string(glm::abs(vehicle.DriveForce(4400, 1).y)));
+            bee::Log::Info(std::to_string(glm::abs(vehicle.DriveForce(3000, 1).y)));
         }
     );
 }
@@ -127,10 +127,10 @@ void VehicleSystem::OnPanel()
                 IM_COL32(255, 255, 80, 255),  // 3rd - Yellow
                 IM_COL32(80, 255, 80, 255),   // 4th - Green
                 IM_COL32(80, 180, 255, 255),  // 5th - Blue
-                IM_COL32(180, 80, 255, 255)   // 6th - Purple
+                IM_COL32(180, 80, 255, 255),  // 6th - Purple
             };
             
-            if (ImGui::CollapsingHeader("Velocity/Force", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Velocity/Force"))
             {
                 static SplineCanvas canvas(graphWidth, graphHeight);
                 canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
@@ -235,7 +235,7 @@ void VehicleSystem::OnPanel()
                 ImGui::Spacing();
             }
             
-            if (ImGui::CollapsingHeader("Torque/Power", ImGuiTreeNodeFlags_DefaultOpen))
+            if (ImGui::CollapsingHeader("Torque/Power"))
             {
                 static SplineCanvas canvas(graphWidth, graphHeight);
                 canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
@@ -302,6 +302,82 @@ void VehicleSystem::OnPanel()
                 ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Torque (N.m)");
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "Power (kW)");
+            }
+            
+            if (ImGui::CollapsingHeader("Torque Curve per Gear", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                static SplineCanvas canvas(graphWidth, graphHeight);
+                canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
+            
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20.0f);
+                canvas.Begin();
+                
+                float normalizedHeight = graphHeight;
+
+                const float rpmMin = vehicle.torqueCurve->GetMinT();
+                const float rpmMax = vehicle.torqueCurve->GetMaxT();
+                const float step_size = (rpmMax - rpmMin) / 39.f;
+
+                // Y axis: wheel torque (peaks in 1st gear)
+                float maxValue = 1.0f;
+                for (size_t i = 0; i < 40; ++i)
+                {
+                    float rpm = rpmMin + step_size * static_cast<float>(i);
+                    for (int g = 1; g <= static_cast<int>(vehicle.gears); ++g)
+                        maxValue = glm::max(maxValue, vehicle.WheelTorque(rpm, g));
+                }
+                maxValue *= 1.1f;
+
+                canvas.DrawLabeledGrid({10, 5}, {0.0f, rpmMax}, {0.0f, maxValue}, "Wheel RPM", "Wheel Torque (N.m)");
+
+                for (int g = 1; g <= static_cast<int>(vehicle.gears); ++g)
+                {
+                    std::vector<glm::vec2> points(40);
+                    for (size_t i = 0; i < 40; ++i)
+                    {
+                        float engineRPM  = rpmMin + step_size * static_cast<float>(i);
+                        float wheelRPM   = vehicle.WheelRPM(engineRPM, g);
+                        float wheelTorque = vehicle.WheelTorque(engineRPM, g);
+                        float x = (wheelRPM / rpmMax) * graphWidth;
+                        float y = graphHeight - (wheelTorque / maxValue) * normalizedHeight;
+                        points[i] = glm::vec2(x, y);
+                    }
+                    canvas.DrawSpline(points, graphColors[g - 1]);
+                }
+
+                // Engine torque reference curve: engine RPM on same axis scale as wheel RPM
+                {
+                    std::vector<glm::vec2> enginePoints(40);
+                    for (size_t i = 0; i < 40; ++i)
+                    {
+                        float engineRPM = rpmMin + step_size * static_cast<float>(i);
+                        float x = (engineRPM / rpmMax) * graphWidth;
+                        float y = graphHeight - (vehicle.Torque(engineRPM) / maxValue) * normalizedHeight;
+                        enginePoints[i] = glm::vec2(x, y);
+                    }
+                    canvas.DrawSpline(enginePoints, graphColors[4]);
+                }
+
+                canvas.End();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+
+                // Legend
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "1st Gear");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.7f, 0.3f, 1.0f), "2nd Gear");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.3f, 1.0f), "3rd Gear");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "4th Gear");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Engine");
             }
         }
     );

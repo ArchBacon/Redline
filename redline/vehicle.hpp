@@ -3,6 +3,7 @@
 #include <array>
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
+#include <glm/gtc/constants.hpp>
 #include <imgui/IconsFontAwesome.h>
 
 #include "Curve.h"
@@ -108,8 +109,8 @@ struct Vehicle
     glm::vec3 v {}; // velocity (m/s)
     glm::vec3 u {}; // direction
     float differentialRatio {};
-    uint8_t gears {};
-    std::vector<float> gearRatios {};
+    uint32_t gears {};
+    std::vector<float> gearRatios {0.0f}; // index 0 is Neutral gear
     float transmissionEfficiency {0.85f};
     float wheelRadius {};
     float reverseGearRatio {};
@@ -134,7 +135,7 @@ struct Vehicle
         brakeForce = data.brakeForce;
         differentialRatio = data.differentialRatio;
         gears = data.gears;
-        gearRatios = data.gearRatios;
+        gearRatios.insert(gearRatios.end(), data.gearRatios.begin(), data.gearRatios.end()); // add gear ration to the end to keep the neutral gear
         wheelRadius = data.wheelRadius;
         reverseGearRatio = data.reverseGearRatio;
         weight = data.mass * g;
@@ -174,10 +175,12 @@ struct Vehicle
     [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
     [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
     [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
-    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear - 1] * differentialRatio * transmissionEfficiency / wheelRadius; }
+    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency / wheelRadius; }
     [[nodiscard]] float MaxTraction() const { return tyreFrictionCoefficient * (b / wheelBase) * M * g; }
+    [[nodiscard]] float WheelRevolution() const { return glm::two_pi<float>() * wheelRadius; }
     [[nodiscard]] bool HasWheelspin(const float rpm, const int gear) const { return glm::length(DriveForce(rpm, gear)) > MaxTraction(); }
-
+    [[nodiscard]] float WheelTorque(const float rpm, const int gear) const { return Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency; }
+    [[nodiscard]] float WheelRPM(const float rpm, const int gear) const { return rpm / (gearRatios[gear] * differentialRatio); }
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
     [[nodiscard]] float TopSpeed() const
