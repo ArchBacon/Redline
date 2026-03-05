@@ -175,7 +175,8 @@ struct Vehicle
     [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
     [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
     [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
-    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency / wheelRadius; }
+    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * DriveTorque(rpm, gear) / wheelRadius; } // F_drive
+    [[nodiscard]] float DriveTorque(const float rpm, const int gear) const { return Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency; } // T_drive
     [[nodiscard]] float MaxTraction() const { return tyreFrictionCoefficient * (b / wheelBase) * M * g; }
     [[nodiscard]] float WheelRevolution() const { return glm::two_pi<float>() * wheelRadius; }
     [[nodiscard]] bool HasWheelspin(const float rpm, const int gear) const { return glm::length(DriveForce(rpm, gear)) > MaxTraction(); }
