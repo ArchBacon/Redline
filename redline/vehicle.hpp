@@ -120,6 +120,7 @@ struct Vehicle
     float b {}; // Distance from CG (Center of Gravity) to Front Axle
     float c {}; // Distance from CG to Rear Axle
     float h {};
+    float tyreFrictionCoefficient {};
     float g {9.8f}; // Gravity
     std::unique_ptr<Curve> torqueCurve {nullptr};
     std::unique_ptr<Curve> horsepowerCurve {nullptr};
@@ -137,9 +138,10 @@ struct Vehicle
         wheelRadius = data.wheelRadius;
         reverseGearRatio = data.reverseGearRatio;
         weight = data.mass * g;
+        tyreFrictionCoefficient = data.tyreFrictionCoefficient;
         ForceMax = data.tyreFrictionCoefficient * weight;
         wheelBase = data.wheelBase;
-        // Weight distribution is a general estimation of 57%/43% Front/Rear
+        // Weight distribution: 43% front / 57% rear (typical rear-biased RWD layout)
         b = wheelBase * 0.57f; 
         c = wheelBase * 0.43f;
         h = data.height;
@@ -147,8 +149,8 @@ struct Vehicle
         horsepowerCurve = std::make_unique<Curve>(data.horsepowerCurvePath);
     }
 
-    [[nodiscard]] float WeightFront(const float alpha) const { return MaxTraction() - ((c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y); }
-    [[nodiscard]] float WeightRear(const float alpha) const { return MaxTraction() + ((b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y); }
+    [[nodiscard]] float WeightFront(const float alpha) const { return (c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y; }
+    [[nodiscard]] float WeightRear(const float alpha) const { return (b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y; }
     [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
     [[nodiscard]] glm::vec3 RollingResistance() const { return -(drag * 30) * v; }
@@ -173,7 +175,8 @@ struct Vehicle
     [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
     [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
     [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * Torque(rpm) * gearRatios[gear - 1] * differentialRatio * transmissionEfficiency / wheelRadius; }
-    [[nodiscard]] float MaxTraction() const { return (M * 0.57f) * g; }
+    [[nodiscard]] float MaxTraction() const { return tyreFrictionCoefficient * (b / wheelBase) * M * g; }
+    [[nodiscard]] bool HasWheelspin(const float rpm, const int gear) const { return glm::length(DriveForce(rpm, gear)) > MaxTraction(); }
 
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
