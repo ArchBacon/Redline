@@ -3,6 +3,7 @@
 #include <array>
 #include <glm/vec3.hpp>
 #include <glm/geometric.hpp>
+#include <glm/trigonometric.hpp>
 #include <glm/gtc/constants.hpp>
 #include <imgui/IconsFontAwesome.h>
 
@@ -100,6 +101,7 @@ struct VehicleData
     float engineBrakingSlip {0.05f};        // Fraction of free-roll ω removed when off-throttle (0=no braking, 1=locked)
     std::string torqueCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_TorqueData.csv"}; 
     std::string horsepowerCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_PowerData.csv"};
+    float locktolockrotation {28.f};
 };
 
 /** Constants
@@ -154,6 +156,7 @@ struct Vehicle
     std::unique_ptr<Curve> torqueCurve {nullptr};
     std::unique_ptr<Curve> horsepowerCurve {nullptr};
     int activeGear {0};
+    float maxsteerangle {};
     
     Vehicle(const VehicleData& data)
     {
@@ -189,6 +192,7 @@ struct Vehicle
         wheelInertia = pureWheelInertia + drivetrainInertia;
         tractionConstant = data.tractionConstant;
         engineBrakingSlip = data.engineBrakingSlip;
+        maxsteerangle = data.locktolockrotation / 2;
     }
 
     /// Returns the gear ratio for a given gear: -1=reverse (negative), 0=neutral, 1..N=forward.
@@ -250,5 +254,27 @@ struct Vehicle
     [[nodiscard]] float TopSpeed() const
     {
         return (-rr + glm::sqrt(rr * rr + 4.0f * drag * engineForce)) / (2.0f * drag);
+    }
+    
+    /** Turning Maths */
+    // sin(Delta) = L / R <=> R = L / sin(Delta)
+    // GNX has a lock-to-lock turn radius of 28 degrees
+    // delta is the amount rotated in degrees, 28 / 2 = 14 degrees in either direction.
+    // to calculate delta, we multiply 14 (half the turn radius) by our steering input (-1 to 1) to get the current delta
+    // R is the turning radius of the car, the less we steer, the bigger the turn radius.
+    // R = L / sin(delta) -> R = 2.746 / sin(14) -> R = 2.746 / 0.242 -> R = 11.347
+    // 11.347 is our turn radius in meters, as if we're driving in the edge of the circle, where the radius is R
+    // the smaller our delta becomes (the more we align our wheels with the forward direction), the larger the radius, up to infinity (straight forward)
+    [[nodiscard]] float TurnRadius(const float alpha) const
+    {
+        return wheelBase / glm::sin(glm::radians(maxsteerangle * alpha));
+    }
+
+    /** Angular velocity (low speed turning) */
+    // omega = v/R (omega is angular velocity, radians per second)
+    [[nodiscard]] float LowSpeedTurnSpeed(const float alpha) const
+    {
+        if (glm::abs(alpha) < 0.001f) return 0.0f;
+        return Speed() / TurnRadius(alpha);
     }
 };

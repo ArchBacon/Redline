@@ -45,6 +45,7 @@ bee::Entity BuickGrandNational87::CreateCarBody()
     auto& pivotTransform = bee::Engine.ECS().CreateComponent<bee::Transform>(pivot);
     pivotTransform.Name = "ModelPivot";
     pivotTransform.SetRotation(EulerDeg(90.0f, 0.0f, 180.0f));
+    pivotTransform.SetTranslation({0.0f, 0.0f, 0.15f});
     pivotTransform.SetParent(entity);
 
     const auto model = bee::Engine.Resources().Load<bee::Model>(
@@ -69,6 +70,7 @@ void BuickGrandNational87::CreateCarWheel(const bee::Entity parent, const std::s
     auto& pivotTransform = bee::Engine.ECS().CreateComponent<bee::Transform>(pivot);
     pivotTransform.Name = "WheelPivot";
     pivotTransform.SetRotation(EulerDeg(90.0f, 0.0f, mirror ? 180.0f : 0.0f));
+    pivotTransform.SetTranslation({0.0f, 0.0f, 0.15f});
     pivotTransform.SetParent(entity);
 
     const auto model = bee::Engine.Resources().Load<bee::Model>(
@@ -94,6 +96,9 @@ void VehicleSystem::Update(float dt)
     const float wKey = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
     const float sKey = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
     const float handbrake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::Space);
+    const float steerRight = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::D);
+    const float steerLeft = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::A);
+    const float steerAlpha = -steerRight + steerLeft;
 
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
         [&](bee::Transform& transform, Vehicle& vehicle)
@@ -205,6 +210,10 @@ void VehicleSystem::Update(float dt)
                                  + vehicle.RollingResistance();
 
             vehicle.SetVelocity(vehicle.v + (fNet / vehicle.M) * dt);
+            const float omega = vehicle.LowSpeedTurnSpeed(steerAlpha);
+            const glm::mat3 rot = glm::mat3(glm::rotate(glm::mat4(1.f), omega * dt, glm::vec3(0, 0, 1)));
+            vehicle.u = glm::normalize(rot * vehicle.u);
+            vehicle.SetVelocity(vehicle.u * vehicle.Speed());
 
             // Ramp to zero at low speed when not accelerating.
             constexpr float stopThreshold = 3.0f / 3.6f; // 3 km/h in m/s
@@ -216,6 +225,8 @@ void VehicleSystem::Update(float dt)
             }
 
             transform.SetTranslation(transform.GetTranslation() + vehicle.v * dt);
+            const float heading = -glm::atan(vehicle.u.x, vehicle.u.y);
+            transform.SetRotation(glm::toQuat(glm::rotate(glm::mat4(1.f), heading, glm::vec3(0, 0, 1))));
         }
     );
 }
