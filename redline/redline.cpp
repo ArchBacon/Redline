@@ -45,9 +45,10 @@ void Redline::Update(float)
     );
     
     {   // Camera Updates
-        float fov = glm::mix(70.f, 110.f, speed / 100.f);
+        float fov = glm::clamp(glm::mix(70.f, 95.f, speed / 100.f * 3.6), 70.f, 95.f);
         // Y=forward offset for lookat target
-        glm::vec3 lookatOffset = glm::mix(glm::vec3(0.0f, 0.0f, 0.8f), glm::vec3(0.0f, 0.0f, 1.2f), speed / 100.f);
+        glm::vec3 lookatOffset = glm::clamp(glm::mix(glm::vec3(0.0f, 0.0f, 0.8f), glm::vec3(0.0f, 0.0f, 0.0f), speed / 100.f * 3.6), glm::vec3(0.0f, 0.0f, 0.8f), glm::vec3(0.0f, 0.0f, 0.0f));
+        glm::vec3 positionOffset = glm::clamp(glm::mix(glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.3f), speed / 100.f * 3.6), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, -1.0f, 0.3f));
 
         [[maybe_unused]] auto& camTransform = bee::Engine.ECS().Registry.get<bee::Transform>(camera);
         auto& camProjection = bee::Engine.ECS().Registry.get<bee::Camera>(camera);
@@ -58,9 +59,9 @@ void Redline::Update(float)
             {
                 auto forward = vtransform.GetRotation() * glm::vec3{0, 1, 0};
                 auto& position = vtransform.GetTranslation();
-                auto offset = glm::vec3{0.0f, -4.2f, 1.40f};
+                auto offset = glm::vec3{0.0f, -3.1f, 1.40f};
 
-                auto view = lookAt(position + offset, position + forward + lookatOffset, glm::vec3(0.0f, 0.0f, 1.0f));
+                auto view = lookAt(position + offset + positionOffset, position + forward + lookatOffset, glm::vec3(0.0f, 0.0f, 1.0f));
                 camTransform.SetFromMatrix(glm::inverse(view));
             }
         );
@@ -69,5 +70,5 @@ void Redline::Update(float)
 
 void Redline::OnPanel()
 {
-    ImGui::SliderFloat("Speed", &speed, 0.0f, 100.0f);
+    ImGui::SliderFloat("Speed", &speed, 0.0f, 100.0f / 3.6f);
 }

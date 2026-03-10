@@ -84,25 +84,138 @@ VehicleSystem::VehicleSystem()
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
             vehicle.u = transform.GetRotation() * glm::vec3{0, 1, 0}; // face forward
-            bee::Log::Info(std::to_string(glm::abs(vehicle.DriveForce(3000, 1).y)));
+            bee::Log::Info(std::to_string(vehicle.RPM()).c_str());
         }
     );
 }
 
 void VehicleSystem::Update(float dt)
 {
-    const float accel = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
-    const float brake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
-    
+    const float wKey = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::W);
+    const float sKey = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::S);
+    const float handbrake = bee::Engine.Input().GetKeyboardKey(bee::Input::KeyboardKey::Space);
+
     bee::Engine.ECS().Registry.view<bee::Transform, Vehicle>().each(
         [&](bee::Transform& transform, Vehicle& vehicle)
         {
-            if (accel > 0.0f)
-                vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Acceleration(accel)));
-            else
-                vehicle.SetVelocity(vehicle.Velocity() + dt * (vehicle.Braking(brake)));
-            
-            transform.SetTranslation(transform.GetTranslation() + dt * vehicle.Velocity());
+            const float vLong = glm::dot(vehicle.v, vehicle.u);
+
+            // ── Input: map W/S to throttle/brake based on direction of travel ─────
+            // W: accelerate forward, or brake if currently reversing
+            // S: brake if going forward, or engage reverse and accelerate backward
+            float throttle   = 0.0f;
+            float brakeInput = 0.0f;
+
+            if (wKey > 0.0f)
+            {
+                if (vLong < -0.5f)
+                    brakeInput = wKey;           // moving backward: brake first
+                else
+                {
+                    if (vehicle.activeGear <= 0) // shift out of neutral/reverse
+                    {
+                        vehicle.activeGear = 1;
+                        vehicle.wheelAngularVelocity = glm::max(vehicle.wheelAngularVelocity, 0.0f);
+                    }
+                    throttle = wKey;
+                }
+            }
+
+            if (sKey > 0.0f)
+            {
+                if (vLong > 0.5f)
+                    brakeInput = sKey;           // moving forward: brake first
+                else
+                {
+                    if (vehicle.activeGear >= 0) // shift into reverse
+                    {
+                        vehicle.activeGear = -1;
+                        vehicle.wheelAngularVelocity = glm::min(vehicle.wheelAngularVelocity, 0.0f);
+                    }
+                    throttle = sKey;
+                }
+            }
+
+            // ── Auto gear shifting (forward gears only) ───────────────────────────
+            if (vehicle.activeGear > 0)
+            {
+                const float preShiftRatio = vehicle.GetGearRatio(vehicle.activeGear);
+                const float preShiftRPM = glm::abs(vehicle.wheelAngularVelocity) * glm::abs(preShiftRatio)
+                                          * vehicle.differentialRatio * 60.0f / glm::two_pi<float>();
+
+                const float upshiftRPM   = vehicle.torqueCurve->GetMaxT() * 0.92f;
+                const float downshiftRPM = vehicle.torqueCurve->GetMaxT() * 0.35f;
+
+                if (preShiftRPM >= upshiftRPM && vehicle.activeGear < vehicle.gears)
+                    vehicle.activeGear++;
+                else if (preShiftRPM <= downshiftRPM && vehicle.activeGear > 1)
+                    vehicle.activeGear--;
+            }
+
+            // ── RPM (recomputed after potential gear shift) ───────────────────────
+            const float gearRatio = vehicle.GetGearRatio(vehicle.activeGear);
+            const float rawRPM = (glm::abs(gearRatio) > 0.001f)
+                ? glm::abs(vehicle.wheelAngularVelocity) * glm::abs(gearRatio)
+                  * vehicle.differentialRatio * 60.0f / glm::two_pi<float>()
+                : 0.0f;
+            const float rpm = glm::clamp(rawRPM,
+                vehicle.torqueCurve->GetMinT(), vehicle.torqueCurve->GetMaxT());
+
+            // ── Drive torque + rev limiter ────────────────────────────────────────
+            float driveTorque = 0.0f;
+            if (throttle > 0.0f && glm::abs(gearRatio) > 0.001f)
+            {
+                if (rawRPM <= vehicle.torqueCurve->GetMaxT())
+                {
+                    // Powered: T_drive = throttle · T_engine(rpm) · x_g · x_d · η
+                    driveTorque = throttle * vehicle.Torque(rpm)
+                                  * gearRatio * vehicle.differentialRatio * vehicle.transmissionEfficiency;
+                }
+                else
+                {
+                    // Rev limiter: clamp ω to redline equivalent
+                    const float maxOmega = vehicle.torqueCurve->GetMaxT() * glm::two_pi<float>()
+                                           / (60.0f * glm::abs(gearRatio) * vehicle.differentialRatio);
+                    vehicle.wheelAngularVelocity = glm::sign(vehicle.wheelAngularVelocity) * maxOmega;
+                }
+            }
+
+            // ── Engine braking (off-throttle, no brake pedal, in gear) ────────────
+            // Directly set ω to a mild negative slip rather than integrating a huge
+            // torque — avoids numerical oscillation that would cancel deceleration.
+            // The slip ratio then produces a gentle braking traction force on the car.
+            if (throttle == 0.0f && brakeInput == 0.0f && glm::abs(gearRatio) > 0.001f)
+                vehicle.wheelAngularVelocity = (vLong / vehicle.wheelRadius) * (1.0f - vehicle.engineBrakingSlip);
+
+            // ── Traction force from slip ratio ────────────────────────────────────
+            const float tractionForce = vehicle.TractionForceScalar();
+
+            // ── Net torque on drive axle (throttle path only) ─────────────────────
+            const float netTorque = driveTorque - tractionForce * vehicle.wheelRadius;
+            if (throttle > 0.0f)
+                vehicle.wheelAngularVelocity += (netTorque / vehicle.wheelInertia) * dt;
+
+            // ── Manual braking / handbrake: lock wheels → SR = -1 → MaxTraction ───
+            if (brakeInput > 0.0f || handbrake > 0.0f)
+                vehicle.wheelAngularVelocity = 0.0f;
+
+            // ── Net force on car body ─────────────────────────────────────────────
+            const glm::vec3 fNet = vehicle.u * tractionForce
+                                 + vehicle.Drag()
+                                 + vehicle.RollingResistance();
+
+            vehicle.SetVelocity(vehicle.v + (fNet / vehicle.M) * dt);
+
+            // Ramp to zero at low speed when not accelerating.
+            constexpr float stopThreshold = 3.0f / 3.6f; // 3 km/h in m/s
+            if (throttle == 0.0f && vehicle.Speed() < stopThreshold)
+            {
+                const float blend = vehicle.Speed() / stopThreshold; // 1 at threshold, 0 at rest
+                vehicle.SetVelocity(vehicle.v * blend);
+                vehicle.wheelAngularVelocity *= blend;
+            }
+
+            transform.SetTranslation(transform.GetTranslation() + vehicle.v * dt);
         }
     );
 }
@@ -114,6 +227,13 @@ void VehicleSystem::OnPanel()
         {
             ImGui::Text("Top Speed  %.1f m/s  %.1f km/h", vehicle.TopSpeed(), vehicle.TopSpeed() * 3.6f);
             ImGui::Text("%s  %.2f m/s  %.2f km/h", transform.Name.c_str(), vehicle.Speed(), vehicle.Speed() * 3.6f);
+
+            if (vehicle.activeGear < 0)
+                ImGui::Text("Gear: R  |  RPM: %.0f  |  SR: %.3f", vehicle.RPM(), vehicle.SlipRatio());
+            else if (vehicle.activeGear == 0)
+                ImGui::Text("Gear: N  |  RPM: %.0f  |  SR: %.3f", vehicle.RPM(), vehicle.SlipRatio());
+            else
+                ImGui::Text("Gear: %d  |  RPM: %.0f  |  SR: %.3f", vehicle.activeGear, vehicle.RPM(), vehicle.SlipRatio());
 
             float topSpeed = 300.f / 3.6f; // Convert to m/s
             
@@ -378,6 +498,68 @@ void VehicleSystem::OnPanel()
                 ImGui::TextColored(ImVec4(0.3f, 1.0f, 0.3f, 1.0f), "4th Gear");
                 ImGui::SameLine();
                 ImGui::TextColored(ImVec4(0.3f, 0.7f, 1.0f, 1.0f), "Engine");
+            }
+
+            if (ImGui::CollapsingHeader("Slip Curve", ImGuiTreeNodeFlags_DefaultOpen))
+            {
+                static SplineCanvas canvas(graphWidth, graphHeight);
+                canvas.SetBackgroundColor(IM_COL32(20, 22, 28, 255));
+
+                ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 40.0f);
+                ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 20.0f);
+                canvas.Begin();
+
+                const float srMin     = -1.2f;
+                const float srMax     =  1.2f;
+                const float maxForce  = vehicle.MaxTraction();
+                const float peakSlip  = maxForce / vehicle.tractionConstant;
+
+                // Helper: map slip ratio → canvas X, force → canvas Y (0 force = vertical centre)
+                auto toX = [&](float sr)    { return (sr - srMin) / (srMax - srMin) * graphWidth; };
+                auto toY = [&](float force) { return graphHeight * 0.5f - (force / maxForce) * graphHeight * 0.5f; };
+
+                canvas.DrawLabeledGrid({12, 8}, {srMin, srMax}, {-maxForce, maxForce}, "Slip Ratio", "Traction (N)");
+
+                // Zero axes
+                canvas.DrawLine({toX(0.f), 0.f}, {toX(0.f), graphHeight}, IM_COL32(60, 64, 72, 255));
+                canvas.DrawLine({0.f, toY(0.f)}, {graphWidth, toY(0.f)}, IM_COL32(60, 64, 72, 255));
+
+                // Slip curve: F = C_t * SR, clamped to ±MaxTraction
+                // Use DrawPolyline (not spline) so the kink at the clamp points stays sharp.
+                {
+                    std::vector<glm::vec2> pts;
+                    pts.reserve(44);
+                    for (int i = 0; i <= 40; ++i)
+                    {
+                        float sr    = srMin + (srMax - srMin) * static_cast<float>(i) / 40.f;
+                        float force = glm::clamp(vehicle.tractionConstant * sr, -maxForce, maxForce);
+                        pts.push_back({toX(sr), toY(force)});
+                    }
+                    canvas.DrawPolyline(pts, graphColors[0], 2.0f);
+                }
+
+                // Peak slip markers (where the curve knee is)
+                canvas.DrawLine({toX( peakSlip), 0.f}, {toX( peakSlip), graphHeight}, IM_COL32(255, 200, 60, 80));
+                canvas.DrawLine({toX(-peakSlip), 0.f}, {toX(-peakSlip), graphHeight}, IM_COL32(255, 200, 60, 80));
+
+                // Current operating point
+                const float currentSR    = glm::clamp(vehicle.SlipRatio(), srMin, srMax);
+                const float currentForce = glm::clamp(vehicle.tractionConstant * currentSR, -maxForce, maxForce);
+                canvas.DrawLine({toX(currentSR), 0.f}, {toX(currentSR), graphHeight}, IM_COL32(80, 220, 255, 180));
+                canvas.DrawDot({toX(currentSR), toY(currentForce)}, 5.f, IM_COL32(80, 220, 255, 255), IM_COL32(255, 255, 255, 200));
+
+                canvas.End();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+                ImGui::Spacing();
+
+                ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Curve");
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(1.0f, 0.78f, 0.24f, 1.0f), "Peak slip (%.2f)", peakSlip);
+                ImGui::SameLine();
+                ImGui::TextColored(ImVec4(0.31f, 0.86f, 1.0f, 1.0f), "Current SR (%.3f)", vehicle.SlipRatio());
             }
         }
     );

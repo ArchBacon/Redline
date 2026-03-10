@@ -84,36 +84,64 @@ public:
 struct VehicleData
 {
     float engineForce {3000.f};
-    float drag {0.44f};
+    float drag {0.38f};
     float mass {1530.f};
-    float brakeForce {8000.f};
     float differentialRatio {3.42f};
-    uint32_t gears {4};
+    int gears {4};
     std::vector<float> gearRatios {2.74f, 1.57f, 1.00f, 0.67f};
-    float reverseGearRatio {2.0f};
+    float reverseGearRatio {4.5f}; // Higher ratio = lower reverse top speed (~34 km/h at redline)
     float wheelRadius {0.33f}; // Meters
     float tyreFrictionCoefficient {1.0f};
     float wheelBase {2.746f}; // Meters
     float height {1.387f}; // Meters
+    float tractionConstant {15000.0f}; // C_t: slip ratio → traction force slope (N per unit SR)
+    float bmep {1617600000.f};              // Pa  — Brake Mean Effective Pressure (161,760 kPa, tuned for feel)
+    float engineDisplacement {0.0038f};// m³  — 3.8 L turbocharged V6
+    float engineBrakingSlip {0.05f};        // Fraction of free-roll ω removed when off-throttle (0=no braking, 1=locked)
     std::string torqueCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_TorqueData.csv"}; 
     std::string horsepowerCurvePath {"vehicles/buick_grand_national_87/Car_Buick_GrandNational_1987_PowerData.csv"};
 };
 
+/** Constants
+ *  EngineForce = 3000
+ *  Cdrag = 0.44
+ *  v = {0, 0}  // velocity
+ *  u = {0, 0}  // direction
+ *  Crr = Cdrag * 30
+ *  M = 1530    // Mass in Kg
+ *  BMEP = 1617.6 kPa (Brake Mean Effective Pressure)
+ */
+
+/** Maths
+ * Ftraction = u * EngineForce
+ * speed = sqrt(v.x * v.x + v.y * v.y)
+ * Fdrag = -Cdrag * v * speed (est.)
+ * Frr = -Crr * v
+ * Flong = Ftraction + Fdrag + Frr
+ * a = F / M // F is net force on car (Flong + Flat)
+ * v = v + (a * dt)
+ * p = p + (v * dt)
+ * Fbraking = -u * Cbraking
+ */
 struct Vehicle
 {
     float engineForce {};
     float drag {};
-    float brakeForce {};
+    float engineBrakingTorque {}; // Nm at engine shaft, applied through drivetrain when off-throttle
+    float engineBrakingSlip {};   // Fraction of free-roll ω removed when off-throttle
     float rr {}; // rolling resistance
     float M {}; // mass in KG (curb)
     glm::vec3 v {}; // velocity (m/s)
     glm::vec3 u {}; // direction
     float differentialRatio {};
-    uint32_t gears {};
-    std::vector<float> gearRatios {0.0f}; // index 0 is Neutral gear
+    int gears {};
+    float reverseGearRatio {};
+    std::vector<float> gearRatios {};       // forward gears only: [0]=1st, [1]=2nd, etc.
+    float wheelAngularVelocity {0.0f};      // ω, rad/s for drive (rear) axle
+    float tractionConstant {};              // C_t: slip ratio → traction force
+    float wheelInertia {};                  // kg·m², rear axle (both wheels)
     float transmissionEfficiency {0.85f};
     float wheelRadius {};
-    float reverseGearRatio {};
     float weight {}; // Newtons
     float ForceMax {};
     float wheelBase {};
@@ -125,6 +153,7 @@ struct Vehicle
     float g {9.8f}; // Gravity
     std::unique_ptr<Curve> torqueCurve {nullptr};
     std::unique_ptr<Curve> horsepowerCurve {nullptr};
+    int activeGear {0};
     
     Vehicle(const VehicleData& data)
     {
@@ -132,12 +161,11 @@ struct Vehicle
         drag = data.drag;
         rr = data.drag * 30;
         M = data.mass;
-        brakeForce = data.brakeForce;
         differentialRatio = data.differentialRatio;
         gears = data.gears;
-        gearRatios.insert(gearRatios.end(), data.gearRatios.begin(), data.gearRatios.end()); // add gear ration to the end to keep the neutral gear
-        wheelRadius = data.wheelRadius;
         reverseGearRatio = data.reverseGearRatio;
+        gearRatios = data.gearRatios; // forward gears: [0]=1st, [1]=2nd, etc.
+        wheelRadius = data.wheelRadius;
         weight = data.mass * g;
         tyreFrictionCoefficient = data.tyreFrictionCoefficient;
         ForceMax = data.tyreFrictionCoefficient * weight;
@@ -148,40 +176,75 @@ struct Vehicle
         h = data.height;
         torqueCurve = std::make_unique<Curve>(data.torqueCurvePath);
         horsepowerCurve = std::make_unique<Curve>(data.horsepowerCurvePath);
+        // Engine braking torque from BMEP: T = BMEP × V_d / 4π  (4-stroke engine)
+        // This gives peak engine torque (~489 Nm). Use ~15% of that as off-throttle resistance
+        // (pumping losses + friction when the throttle plate is closed).
+        engineBrakingTorque = (data.bmep * data.engineDisplacement / (4.0f * glm::pi<float>())) * 0.15f;
+
+        // Wheel inertia: solid cylinder (I = ½·m·r²) for both rear wheels (~20 kg each)
+        // plus drivetrain/axle contribution. Low inertia causes instant wheelspin.
+        const float wheelMass = 20.0f;
+        const float pureWheelInertia = 2.0f * (0.5f * wheelMass * wheelRadius * wheelRadius);
+        const float drivetrainInertia = 4.0f; // kg·m² — driveshaft, diff, half-shafts
+        wheelInertia = pureWheelInertia + drivetrainInertia;
+        tractionConstant = data.tractionConstant;
+        engineBrakingSlip = data.engineBrakingSlip;
     }
 
-    [[nodiscard]] float WeightFront(const float alpha) const { return (c / wheelBase) * weight - (h / wheelBase) * M * Acceleration(alpha).y; }
-    [[nodiscard]] float WeightRear(const float alpha) const { return (b / wheelBase) * weight + (h / wheelBase) * M * Acceleration(alpha).y; }
-    [[nodiscard]] glm::vec3 Traction(const float alpha) const { return u * (engineForce * alpha); }
+    /// Returns the gear ratio for a given gear: -1=reverse (negative), 0=neutral, 1..N=forward.
+    [[nodiscard]] float GetGearRatio(int gear) const
+    {
+        if (gear == 0) return 0.0f;
+        if (gear < 0)  return -reverseGearRatio;
+        return gearRatios[static_cast<size_t>(gear) - 1];
+    }
+
+    /// SR = (ω·R − v_long) / max(|v_long|, |ω·R|, ε).
+    /// Zero for free-rolling, −1 for locked-wheel braking, positive during acceleration.
+    /// Using the larger of car speed and wheel surface speed as the reference avoids the
+    /// constant-floor problem that weakens braking force at low speeds.
+    [[nodiscard]] float SlipRatio() const
+    {
+        const float vLong      = glm::dot(v, u);
+        const float wheelSpeed = wheelAngularVelocity * wheelRadius;
+        const float refSpeed   = glm::max(glm::abs(vLong), glm::abs(wheelSpeed));
+        const float denom      = glm::max(refSpeed, 0.001f); // epsilon prevents ÷0 at rest
+        return (wheelSpeed - vLong) / denom;
+    }
+
+    /// F_traction = C_t * SR, clamped to ±MaxTraction (rear wheel weight only — drive wheels).
+    [[nodiscard]] float TractionForceScalar() const
+    {
+        return glm::clamp(tractionConstant * SlipRatio(), -MaxTraction(), MaxTraction());
+    }
+
     [[nodiscard]] glm::vec3 Drag() const { return -drag * v * glm::length(v); }
     [[nodiscard]] glm::vec3 RollingResistance() const { return -(drag * 30) * v; }
-    // [[nodiscard]] glm::vec3 LongitudinalForce() const { return Traction() + Drag() + RollingResistance(); }
-    [[nodiscard]] glm::vec3 LongitudinalForce(const float alpha, const bool braking) const
-    {
-        if (braking)
-        {
-            return BreakForce(alpha) + Drag() + RollingResistance();
-        }
-        
-        return Traction(alpha) + Drag() + RollingResistance();
-    }
-    [[nodiscard]] glm::vec3 Acceleration(const float alpha) const { return LongitudinalForce(alpha, false) / M; } // m/s^2
-    [[nodiscard]] glm::vec3 Braking(const float alpha) const { return LongitudinalForce(alpha, true) / M; } // m/s^2
     [[nodiscard]] glm::vec3 Velocity() const { return v; }
     void SetVelocity(const glm::vec3 inV) { v = inV; }
-    [[nodiscard]] float Speed() const { return glm::sqrt(v.x * v.x + v.y * v.y + v.z * v.z); }
-    [[nodiscard]] float SpeedXY() const { return glm::sqrt(v.x * v.x + v.y * v.y); }
+    [[nodiscard]] float Speed() const { return glm::length(v); }
     [[nodiscard]] glm::vec3 Direction() const { return u; }
-    [[nodiscard]] glm::vec3 BreakForce(const float alpha) const { return -u * (brakeForce * alpha); }
     [[nodiscard]] float Torque(const float rpm) const { return torqueCurve->GetValueAt(rpm); }
     [[nodiscard]] float Horsepower(const float rpm) const { return horsepowerCurve->GetValueAt(rpm); }
-    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * DriveTorque(rpm, gear) / wheelRadius; } // F_drive
-    [[nodiscard]] float DriveTorque(const float rpm, const int gear) const { return Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency; } // T_drive
+    [[nodiscard]] float DriveTorque(const float rpm, const int gear) const { return Torque(rpm) * GetGearRatio(gear) * differentialRatio * transmissionEfficiency; }
+    [[nodiscard]] glm::vec3 DriveForce(const float rpm, const int gear) const { return u * DriveTorque(rpm, gear) / wheelRadius; }
     [[nodiscard]] float MaxTraction() const { return tyreFrictionCoefficient * (b / wheelBase) * M * g; }
-    [[nodiscard]] float WheelRevolution() const { return glm::two_pi<float>() * wheelRadius; }
     [[nodiscard]] bool HasWheelspin(const float rpm, const int gear) const { return glm::length(DriveForce(rpm, gear)) > MaxTraction(); }
-    [[nodiscard]] float WheelTorque(const float rpm, const int gear) const { return Torque(rpm) * gearRatios[gear] * differentialRatio * transmissionEfficiency; }
-    [[nodiscard]] float WheelRPM(const float rpm, const int gear) const { return rpm / (gearRatios[gear] * differentialRatio); }
+    [[nodiscard]] float WheelTorque(const float rpm, const int gear) const { return Torque(rpm) * GetGearRatio(gear) * differentialRatio * transmissionEfficiency; }
+    [[nodiscard]] float WheelRPM(const float rpm, const int gear) const
+    {
+        const float gr = GetGearRatio(gear);
+        return (glm::abs(gr) > 0.001f) ? rpm / (gr * differentialRatio) : 0.0f;
+    }
+
+    /// Engine RPM derived from wheel angular velocity through the gear train.
+    [[nodiscard]] float RPM() const
+    {
+        const float gRatio = glm::abs(GetGearRatio(activeGear));
+        if (gRatio < 0.001f) return torqueCurve->GetMinT(); // neutral → idle
+        const float rpm = glm::abs(wheelAngularVelocity) * gRatio * differentialRatio * 60.0f / glm::two_pi<float>();
+        return glm::clamp(rpm, torqueCurve->GetMinT(), torqueCurve->GetMaxT());
+    }
 
     // Solve drag·v² + rr·v - engineForce = 0  →  quadratic formula
     [[nodiscard]] float TopSpeed() const
