@@ -6,6 +6,7 @@
 #include "../Components/GearboxComponent.hpp"
 #include "../Components/SteeringComponent.hpp"
 #include "../Components/WheelComponent.hpp"
+#include "../Components/WheelVisualComponent.hpp"
 #include "core/ecs.hpp"
 #include "core/engine.hpp"
 #include "core/resources.hpp"
@@ -28,14 +29,18 @@ inline void CreateCarBody(const bee::Entity entity)
     model->Instantiate(body);
 }
 
-inline void CreateCarWheel(const bee::Entity parent, const std::string& affix, const glm::vec3& position, const bool mirror)
+inline void CreateCarWheel(const bee::Entity parent, const bee::Entity car, const std::string& affix, const glm::vec3& position, const bool mirror, const bool isFront)
 {
     const auto entity = bee::Engine.ECS().CreateEntity();
     auto& transform = bee::Engine.ECS().CreateComponent<bee::Transform>(entity);
     transform.Name = "Buick_Grand_National_87_Wheel_" + affix;
     transform.SetTranslation(position + float3{0.0f, 0.0f, 0.15f});
-    transform.SetRotation(glm::quat(glm::radians(float3(90.0f, 0.0f, mirror ? 180.0f : 0.0f))));
     transform.SetParent(parent);
+
+    auto& visual = bee::Engine.ECS().CreateComponent<WheelVisual>(entity);
+    visual.car     = car;
+    visual.isFront = isFront;
+    visual.mirror  = mirror;
 
     const auto model = bee::Engine.Resources().Load<bee::Model>(
         bee::FileIO::Directory::Assets,
@@ -64,7 +69,7 @@ inline bee::Entity Buick_GrandNational_87()
     chassis.direction = {0.0f, 1.0f, 0.0f};
     
     auto& engine = ecs.CreateComponent<Engine>(car);
-    engine.bmep = 16176000.0f;
+    engine.bmep = 2063016.0f;   // Pa — correct BMEP for GNX 3.8L turbo V6 (~625 Nm peak)
     engine.displacement = 3.8f;
     engine.cylinders = 6;
     engine.pumpingLossFraction = 0.15f;
@@ -94,10 +99,10 @@ inline bee::Entity Buick_GrandNational_87()
     
     // ── Visual components ────────────────────────────────────
     CreateCarBody(car);
-    CreateCarWheel(car, "FL", { 0.800f,  1.350f, 0.120f}, false);
-    CreateCarWheel(car, "FR", {-0.800f,  1.350f, 0.120f}, true);
-    CreateCarWheel(car, "RL", { 0.800f, -1.350f, 0.120f}, false);
-    CreateCarWheel(car, "RR", {-0.800f, -1.350f, 0.120f}, true);
+    CreateCarWheel(car, car, "FL", { 0.800f,  1.350f, 0.120f}, false, true);
+    CreateCarWheel(car, car, "FR", {-0.800f,  1.350f, 0.120f}, true,  true);
+    CreateCarWheel(car, car, "RL", { 0.800f, -1.350f, 0.120f}, false, false);
+    CreateCarWheel(car, car, "RR", {-0.800f, -1.350f, 0.120f}, true,  false);
     
     ecs.CreateComponent<PlayerCar>(car);
     

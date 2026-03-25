@@ -33,7 +33,7 @@ void GearboxSystem::Update(const float)
             if (gearbox.activeGear > 0)
             {
                 const float upRPM = engine.torqueCurve.GetMaxT() * 0.92f;
-                const float downRPM = engine.torqueCurve.GetMaxT() * 0.35f;
+                const float downRPM = engine.torqueCurve.GetMaxT() * 0.45f;
 
                 if (engine.currentRPM >= upRPM && gearbox.activeGear < gearbox.NumForwardGears()) gearbox.activeGear = gearbox.activeGear++;
                 else if (engine.currentRPM <= downRPM && gearbox.activeGear > 1) gearbox.activeGear = gearbox.activeGear--;

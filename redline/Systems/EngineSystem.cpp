@@ -22,7 +22,7 @@ void EngineSystem::Update(const float)
                 : 0.0f;
             
             engine.currentRPM = glm::clamp(
-                engine.currentRPM,
+                RPM,
                 engine.torqueCurve.GetMinT(),
                 engine.torqueCurve.GetMaxT()
             );

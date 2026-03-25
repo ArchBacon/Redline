@@ -6,8 +6,11 @@
 #include "../Components/DriveInputComponent.hpp"
 #include "../Components/EngineComponent.hpp"
 #include "../Components/GearboxComponent.hpp"
+#include "../Components/SteeringComponent.hpp"
 #include "../Components/WheelComponent.hpp"
+#include "../Components/WheelVisualComponent.hpp"
 #include "core/engine.hpp"
+#include "core/transform.hpp"
 
 void WheelSystem::Update(const float dt)
 {
@@ -15,7 +18,7 @@ void WheelSystem::Update(const float dt)
         [&](Wheel& wheel, const Engine& engine, const Gearbox& gearbox, const Chassis& chassis, const DriveInput& drive)
         {
             const float vLong = glm::dot(chassis.velocity, chassis.direction);
-            const float gearRatio = gearbox.GetRatio(gearbox.activeGear);
+            const float gearRatio = glm::abs(gearbox.GetRatio(gearbox.activeGear));
             
             // ── Engine braking torque (off-throttle, in gear) ─────
             float engineBrakeTorque = 0.0f;
@@ -53,6 +56,33 @@ void WheelSystem::Update(const float dt)
             {
                 wheel.angularVelocity = 0.0f;
             }
+        }
+    );
+
+    // ── Visual wheel rotation (spin + steer) ──────────────────────────────
+    bee::Engine.ECS().Registry.view<bee::Transform, WheelVisual>().each(
+        [&](bee::Transform& wTransform, WheelVisual& visual)
+        {
+            const auto* wheel = bee::Engine.ECS().Registry.try_get<const Wheel>(visual.car);
+            if (!wheel) return;
+
+            visual.spinAngle += wheel->angularVelocity * dt;
+
+            const glm::quat baseQuat = glm::quat(glm::radians(float3(90.0f, 0.0f, visual.mirror ? 180.0f : 0.0f)));
+            const glm::quat spinQuat = glm::angleAxis(visual.spinAngle, glm::vec3(1.0f, 0.0f, 0.0f));
+            glm::quat finalQuat = baseQuat * spinQuat;
+
+            if (visual.isFront)
+            {
+                const auto* steering = bee::Engine.ECS().Registry.try_get<const Steering>(visual.car);
+                if (steering)
+                {
+                    const glm::quat steerQuat = glm::angleAxis(steering->currentAngle, glm::vec3(0.0f, 0.0f, 1.0f));
+                    finalQuat = steerQuat * finalQuat;
+                }
+            }
+
+            wTransform.SetRotation(finalQuat);
         }
     );
 }

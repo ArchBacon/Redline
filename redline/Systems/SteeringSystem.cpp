@@ -15,8 +15,10 @@ void SteeringSystem::Update(const float dt)
     bee::Engine.ECS().Registry.view<bee::Transform, Steering, Chassis, const DriveInput>()
         .each([&](bee::Transform& transform, Steering& steering, Chassis& chassis, const DriveInput& drive)
         {
-            steering.currentInput = -drive.steer;
-            steering.currentAngle = steering.maxAngleRad * -drive.steer;
+            const float targetAngle = steering.maxAngleRad * -drive.steer;
+            const float slewRate   = steering.maxAngleRad / 0.5f;  // full lock in 0.5 s
+            steering.currentAngle += glm::clamp(targetAngle - steering.currentAngle, -slewRate * dt, slewRate * dt);
+            steering.currentInput  = steering.currentAngle / steering.maxAngleRad;
             
             const float speed = glm::length(chassis.velocity);
             if (speed < 0.1f) return;
