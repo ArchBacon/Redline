@@ -11,6 +11,7 @@
 #include "../Components/WheelVisualComponent.hpp"
 #include "core/engine.hpp"
 #include "core/transform.hpp"
+#include "tools/log.hpp"
 
 void WheelSystem::Update(const float dt)
 {

@@ -8,6 +8,7 @@
 #include "../Components/GearboxComponent.hpp"
 #include "../Components/WheelComponent.hpp"
 #include "core/engine.hpp"
+#include "tools/log.hpp"
 
 void EngineSystem::Update(const float)
 {
@@ -21,11 +22,16 @@ void EngineSystem::Update(const float)
                 ? glm::abs(wheel.angularVelocity) * glm::abs(gearRatio) * gearbox.diffRatio * 60.0f / glm::two_pi<float>()
                 : 0.0f;
             
+            bee::Log::Info("EngineSystem::Update eng vel: {}", wheel.angularVelocity);
+            bee::Log::Info("EngineSystem::Update RPM: {}", RPM);
+            
             engine.currentRPM = glm::clamp(
                 RPM,
                 engine.torqueCurve.GetMinT(),
                 engine.torqueCurve.GetMaxT()
             );
+            
+            bee::Log::Info("EngineSystem::Update currentRPM: {}", engine.currentRPM);
             
             engine.driveTorque = 0.0f;                                   // rev limiter
             if (drive.throttle > 0.0f && glm::abs(gearRatio) > 0.001f && RPM <= engine.torqueCurve.GetMaxT())

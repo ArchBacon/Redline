@@ -9,6 +9,7 @@
 #include "../Components/GearboxComponent.hpp"
 #include "../Components/WheelComponent.hpp"
 #include "core/engine.hpp"
+#include "tools/log.hpp"
 
 void GearboxSystem::Update(const float)
 {
